@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 import numpy as np
 from decimal import Decimal, ROUND_HALF_UP
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -67,15 +67,17 @@ def main():
             st.write(f"Resultado líquido: {formatar_moeda(resultado['resultado_liquido'])}")
             st.write(f"Investimento na TLR: {formatar_moeda(resultado['investimento_tlr'])}")
 
-        # Gráfico comparativo
-        fig = go.Figure()
-        fig.add_trace(go.Bar(x=['Consórcio', 'Investimento TLR'], 
-                             y=[float(resultado['resultado_liquido']), float(resultado['investimento_tlr'])],
-                             name='Retorno'))
-        fig.update_layout(title="Comparativo: Consórcio vs. Investimento TLR",
-                          xaxis_title="Opção",
-                          yaxis_title="Valor (R$)")
-        st.plotly_chart(fig)
+        # Gráfico comparativo usando Matplotlib
+        fig, ax = plt.subplots()
+        opcoes = ['Consórcio', 'Investimento TLR']
+        valores = [float(resultado['resultado_liquido']), float(resultado['investimento_tlr'])]
+        ax.bar(opcoes, valores)
+        ax.set_title("Comparativo: Consórcio vs. Investimento TLR")
+        ax.set_xlabel("Opção")
+        ax.set_ylabel("Valor (R$)")
+        for i, v in enumerate(valores):
+            ax.text(i, v, f'{v:.2f}', ha='center', va='bottom')
+        st.pyplot(fig)
 
     st.sidebar.info(f"Versão: {VERSION}")
 
