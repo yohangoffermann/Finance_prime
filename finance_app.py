@@ -3,8 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from numpy import irr
 
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 
 def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -24,7 +25,7 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
             raise ValueError("O valor do lance deve ser menor que o valor do crédito.")
 
         total_pago = valor_parcela * prazo
-        saldo_devedor = valor_credito - (valor_parcela * prazo)
+        saldo_devedor = max(0, valor_credito - (valor_parcela * prazo))
         valor_agio = saldo_devedor * percentual_agio
         credito_novo = valor_credito - valor_lance
 
@@ -33,16 +34,18 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
         ganho_investimento = credito_novo * ((1 + tlr_mensal) ** tempo_investido - 1) * (1 - ir)
 
         custo_consorcio = total_pago - valor_credito
-        ganho_consorcio = ganho_investimento + valor_agio
-        resultado_liquido = ganho_consorcio - custo_consorcio
+        resultado_liquido = valor_agio + ganho_investimento - custo_consorcio
 
         investimento_tlr = valor_lance * ((1 + tlr_anual) ** (prazo / 12) - 1) * (1 - ir)
 
         relacao_parcela_credito = (valor_parcela / credito_novo) * 100
-        retorno_necessario = (investimento_tlr - resultado_liquido) / credito_novo * 100
+        retorno_necessario = max(0, (investimento_tlr - resultado_liquido) / credito_novo * 100)
 
-        taxa_interna_retorno = ((resultado_liquido / total_pago) ** (1 / (prazo / 12)) - 1) * 100
-        indice_lucratividade = resultado_liquido / total_pago
+        fluxo_caixa = [-valor_lance] + [-valor_parcela] * (prazo - 1) + [valor_credito + valor_agio]
+        tir = irr(fluxo_caixa)
+        taxa_interna_retorno = max(0, (tir * 12 * 100))  # Convertendo para anual e percentual
+
+        indice_lucratividade = (valor_agio + ganho_investimento) / total_pago
 
         return {
             "total_pago": total_pago,
@@ -50,7 +53,6 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
             "valor_agio": valor_agio,
             "credito_novo": credito_novo,
             "ganho_investimento": ganho_investimento,
-            "ganho_consorcio": ganho_consorcio,
             "custo_consorcio": custo_consorcio,
             "resultado_liquido": resultado_liquido,
             "investimento_tlr": investimento_tlr,
@@ -63,6 +65,20 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
     except Exception as e:
         st.error(f"Ocorreu um erro: {str(e)}")
         return None
+
+def sanity_checks(resultado):
+    checks = []
+    if resultado['saldo_devedor'] < 0:
+        checks.append("Saldo devedor negativo")
+    if resultado['custo_consorcio'] < 0:
+        checks.append("Custo do consórcio negativo")
+    if resultado['resultado_liquido'] > resultado['credito_novo'] * 2:
+        checks.append("Resultado líquido excessivamente alto")
+    if resultado['indice_lucratividade'] < 0 or resultado['indice_lucratividade'] > 3:
+        checks.append("Índice de Lucratividade fora da faixa esperada")
+    if resultado['taxa_interna_retorno'] < 0 or resultado['taxa_interna_retorno'] > 100:
+        checks.append("Taxa Interna de Retorno fora da faixa esperada")
+    return checks
 
 def gerar_recomendacoes(resultado):
     recomendacoes = []
@@ -188,6 +204,12 @@ def main():
         resultado = calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido)
         
         if resultado:
+            sanity_results = sanity_checks(resultado)
+            if sanity_results:
+                st.warning("Atenção: Os seguintes problemas foram detectados nos cálculos:")
+                for check in sanity_results:
+                    st.write(f"- {check}")
+
             st.subheader("Resultados da Análise")
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -197,8 +219,7 @@ def main():
             with col2:
                 st.write(f"Crédito novo: {formatar_moeda(resultado['credito_novo'])}")
                 st.write(f"Ganho com investimento: {formatar_moeda(resultado['ganho_investimento'])}")
-                st.write(f"Custo do consórcio: {formatar_moeda(resultado['custo_consorcio'])}")
-            with col3:
+                st.write(f"Custo do consórcio: {formatar_moeda(resultado['custo_c            with col3:
                 st.write(f"Resultado líquido: {formatar_moeda(resultado['resultado_liquido'])}")
                 st.write(f"Investimento na TLR: {formatar_moeda(resultado['investimento_tlr'])}")
                 st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
@@ -210,9 +231,9 @@ def main():
                 st.write(f"Retorno necessário para igualar TLR: {resultado['retorno_necessario']:.2f}%")
             with col2:
                 st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
-                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}%")
+                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}")
             with col3:
-                st.write(f"Ganho do Consórcio: {formatar_moeda(resultado['ganho_consorcio'])}")
+                st.write(f"Ganho do Consórcio: {formatar_moeda(resultado['ganho_investimento'] + resultado['valor_agio'])}")
                 st.write(f"Diferença para TLR: {formatar_moeda(resultado['resultado_liquido'] - resultado['investimento_tlr'])}")
 
             st.subheader("Análise Gráfica")
