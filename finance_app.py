@@ -2,26 +2,23 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from decimal import Decimal, ROUND_HALF_UP
-import base64
-import io
 import numpy as np
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido):
     try:
-        valor_credito = Decimal(valor_credito)
-        valor_lance = Decimal(valor_lance)
-        valor_parcela = Decimal(valor_parcela)
-        prazo = Decimal(prazo)
-        percentual_agio = Decimal(percentual_agio) / Decimal(100)
-        tlr_anual = Decimal(tlr_anual) / Decimal(100)
-        ir = Decimal(ir) / Decimal(100)
-        percentual_tempo_investido = Decimal(percentual_tempo_investido) / Decimal(100)
+        valor_credito = float(valor_credito)
+        valor_lance = float(valor_lance)
+        valor_parcela = float(valor_parcela)
+        prazo = int(prazo)
+        percentual_agio = float(percentual_agio) / 100
+        tlr_anual = float(tlr_anual) / 100
+        ir = float(ir) / 100
+        percentual_tempo_investido = float(percentual_tempo_investido) / 100
 
         if valor_lance >= valor_credito:
             raise ValueError("O valor do lance deve ser menor que o valor do crédito.")
@@ -31,7 +28,7 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
         valor_agio = saldo_devedor * percentual_agio
         credito_novo = valor_credito - valor_lance
 
-        tlr_mensal = (1 + tlr_anual) ** (Decimal(1) / Decimal(12)) - 1
+        tlr_mensal = (1 + tlr_anual) ** (1 / 12) - 1
         tempo_investido = prazo * percentual_tempo_investido
         ganho_investimento = credito_novo * ((1 + tlr_mensal) ** tempo_investido - 1) * (1 - ir)
 
@@ -39,12 +36,12 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
         ganho_consorcio = ganho_investimento + valor_agio
         resultado_liquido = ganho_consorcio - custo_consorcio
 
-        investimento_tlr = valor_lance * ((1 + tlr_anual) ** (prazo / Decimal(12)) - 1) * (1 - ir)
+        investimento_tlr = valor_lance * ((1 + tlr_anual) ** (prazo / 12) - 1) * (1 - ir)
 
         relacao_parcela_credito = (valor_parcela / credito_novo) * 100
         retorno_necessario = (investimento_tlr - resultado_liquido) / credito_novo * 100
 
-        taxa_interna_retorno = ((resultado_liquido / total_pago) ** (Decimal(1) / (prazo / Decimal(12))) - 1) * 100
+        taxa_interna_retorno = ((resultado_liquido / total_pago) ** (1 / (prazo / 12)) - 1) * 100
         indice_lucratividade = resultado_liquido / total_pago
 
         return {
@@ -63,12 +60,9 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
             "indice_lucratividade": indice_lucratividade,
             "tlr_anual": tlr_anual * 100
         }
-    except ZeroDivisionError:
-        st.error("Erro: Divisão por zero. Verifique os valores inseridos.")
-    except ValueError as e:
-        st.error(f"Erro: {str(e)}")
     except Exception as e:
-        st.error(f"Ocorreu um erro inesperado: {str(e)}")
+        st.error(f"Ocorreu um erro: {str(e)}")
+        return None
 
 def gerar_recomendacoes(resultado):
     recomendacoes = []
@@ -93,16 +87,9 @@ def gerar_recomendacoes(resultado):
 
     return recomendacoes
 
-def exportar_csv(resultado):
-    df = pd.DataFrame([resultado])
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="resultado_financex_prime.csv">Download CSV</a>'
-    return href
-
 def plot_comparativo(resultado):
     labels = ['Consórcio', 'Investimento TLR']
-    valores = [float(resultado['resultado_liquido']), float(resultado['investimento_tlr'])]
+    valores = [resultado['resultado_liquido'], resultado['investimento_tlr']]
     
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.bar(labels, valores, color=['#1f77b4', '#ff7f0e'])
@@ -162,7 +149,6 @@ def main():
     st.set_page_config(page_title="FinanceX Prime", page_icon="", layout="wide")
     st.title("FinanceX Prime - Análise Avançada de Consórcios")
 
-    # Cenários predefinidos
     cenarios = {
         "Conservador": {"valor_credito": 80000, "valor_lance": 10000, "valor_parcela": 800, "prazo": 60, "percentual_agio": 5, "tlr_anual": 4, "ir": 15, "percentual_tempo_investido": 30},
         "Moderado": {"valor_credito": 100000, "valor_lance": 15000, "valor_parcela": 1000, "prazo": 72, "percentual_agio": 8, "tlr_anual": 5, "ir": 15, "percentual_tempo_investido": 50},
@@ -221,12 +207,10 @@ def main():
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.write(f"Relação parcela/crédito novo: {resultado['relacao_parcela_credito']:.2f}%")
-                            with col1:
-                st.write(f"Relação parcela/crédito novo: {resultado['relacao_parcela_credito']:.2f}%")
                 st.write(f"Retorno necessário para igualar TLR: {resultado['retorno_necessario']:.2f}%")
             with col2:
                 st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
-                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}")
+                                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}")
             with col3:
                 st.write(f"Ganho do Consórcio: {formatar_moeda(resultado['ganho_consorcio'])}")
                 st.write(f"Diferença para TLR: {formatar_moeda(resultado['resultado_liquido'] - resultado['investimento_tlr'])}")
@@ -248,9 +232,6 @@ def main():
             recomendacoes = gerar_recomendacoes(resultado)
             for rec in recomendacoes:
                 st.write(f"- {rec}")
-
-            st.subheader("Exportar Resultados")
-            st.markdown(exportar_csv(resultado), unsafe_allow_html=True)
 
     st.sidebar.info(f"Versão: {VERSION}")
     st.sidebar.warning("Este é um modelo simplificado para fins educacionais. Consulte um profissional financeiro para decisões reais.")
