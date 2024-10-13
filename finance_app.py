@@ -210,7 +210,7 @@ def main():
                 st.write(f"Retorno necessário para igualar TLR: {resultado['retorno_necessario']:.2f}%")
             with col2:
                 st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
-                                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}")
+                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}%")
             with col3:
                 st.write(f"Ganho do Consórcio: {formatar_moeda(resultado['ganho_consorcio'])}")
                 st.write(f"Diferença para TLR: {formatar_moeda(resultado['resultado_liquido'] - resultado['investimento_tlr'])}")
