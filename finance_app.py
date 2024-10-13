@@ -219,7 +219,8 @@ def main():
             with col2:
                 st.write(f"Crédito novo: {formatar_moeda(resultado['credito_novo'])}")
                 st.write(f"Ganho com investimento: {formatar_moeda(resultado['ganho_investimento'])}")
-                st.write(f"Custo do consórcio: {formatar_moeda(resultado['custo_c            with col3:
+                st.write(f"Custo do consórcio: {formatar_moeda(resultado['custo_consorcio'])}")
+             with col3:
                 st.write(f"Resultado líquido: {formatar_moeda(resultado['resultado_liquido'])}")
                 st.write(f"Investimento na TLR: {formatar_moeda(resultado['investimento_tlr'])}")
                 st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
