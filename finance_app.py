@@ -1,11 +1,13 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from decimal import Decimal, ROUND_HALF_UP
 import base64
 import io
+import numpy as np
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 def formatar_moeda(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -34,12 +36,16 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
         ganho_investimento = credito_novo * ((1 + tlr_mensal) ** tempo_investido - 1) * (1 - ir)
 
         custo_consorcio = total_pago - valor_credito
-        resultado_liquido = ganho_investimento + valor_agio - custo_consorcio
+        ganho_consorcio = ganho_investimento + valor_agio
+        resultado_liquido = ganho_consorcio - custo_consorcio
 
         investimento_tlr = valor_lance * ((1 + tlr_anual) ** (prazo / Decimal(12)) - 1) * (1 - ir)
 
         relacao_parcela_credito = (valor_parcela / credito_novo) * 100
         retorno_necessario = (investimento_tlr - resultado_liquido) / credito_novo * 100
+
+        taxa_interna_retorno = ((resultado_liquido / total_pago) ** (Decimal(1) / (prazo / Decimal(12))) - 1) * 100
+        indice_lucratividade = resultado_liquido / total_pago
 
         return {
             "total_pago": total_pago,
@@ -47,10 +53,15 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
             "valor_agio": valor_agio,
             "credito_novo": credito_novo,
             "ganho_investimento": ganho_investimento,
+            "ganho_consorcio": ganho_consorcio,
+            "custo_consorcio": custo_consorcio,
             "resultado_liquido": resultado_liquido,
             "investimento_tlr": investimento_tlr,
             "relacao_parcela_credito": relacao_parcela_credito,
-            "retorno_necessario": retorno_necessario
+            "retorno_necessario": retorno_necessario,
+            "taxa_interna_retorno": taxa_interna_retorno,
+            "indice_lucratividade": indice_lucratividade,
+            "tlr_anual": tlr_anual * 100
         }
     except ZeroDivisionError:
         st.error("Erro: Divisão por zero. Verifique os valores inseridos.")
@@ -62,15 +73,23 @@ def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percent
 def gerar_recomendacoes(resultado):
     recomendacoes = []
     if resultado['resultado_liquido'] > resultado['investimento_tlr']:
-        recomendacoes.append("O consórcio parece ser mais vantajoso que o investimento na TLR.")
+        recomendacoes.append(f"O consórcio é mais vantajoso que o investimento na TLR por {formatar_moeda(resultado['resultado_liquido'] - resultado['investimento_tlr'])}.")
     else:
-        recomendacoes.append("O investimento na TLR parece ser mais vantajoso que o consórcio.")
+        recomendacoes.append(f"O investimento na TLR é mais vantajoso que o consórcio por {formatar_moeda(resultado['investimento_tlr'] - resultado['resultado_liquido'])}.")
 
     if resultado['relacao_parcela_credito'] > 2:
-        recomendacoes.append("A relação parcela/crédito novo está alta. Considere reduzir o valor da parcela.")
+        recomendacoes.append(f"A relação parcela/crédito novo de {resultado['relacao_parcela_credito']:.2f}% está alta. Considere reduzir o valor da parcela ou aumentar o lance.")
 
     if resultado['retorno_necessario'] > 10:
-        recomendacoes.append("O retorno necessário para igualar a TLR é significativo. Avalie cuidadosamente os riscos.")
+        recomendacoes.append(f"O retorno necessário de {resultado['retorno_necessario']:.2f}% para igualar a TLR é significativo. Avalie cuidadosamente os riscos e sua capacidade de obter este retorno.")
+
+    if resultado['taxa_interna_retorno'] > resultado['tlr_anual']:
+        recomendacoes.append(f"A taxa interna de retorno do consórcio ({resultado['taxa_interna_retorno']:.2f}%) é superior à TLR ({resultado['tlr_anual']:.2f}%), indicando uma boa oportunidade.")
+
+    if resultado['indice_lucratividade'] > 1:
+        recomendacoes.append(f"O índice de lucratividade de {resultado['indice_lucratividade']:.2f} indica que o consórcio é lucrativo.")
+    else:
+        recomendacoes.append(f"O índice de lucratividade de {resultado['indice_lucratividade']:.2f} indica que o consórcio não é lucrativo nas condições atuais.")
 
     return recomendacoes
 
@@ -85,18 +104,63 @@ def plot_comparativo(resultado):
     labels = ['Consórcio', 'Investimento TLR']
     valores = [float(resultado['resultado_liquido']), float(resultado['investimento_tlr'])]
     
-    fig, ax = plt.subplots()
-    ax.bar(labels, valores)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.bar(labels, valores, color=['#1f77b4', '#ff7f0e'])
     ax.set_ylabel('Valor (R$)')
     ax.set_title('Comparativo: Consórcio vs. Investimento TLR')
     
-    for i, v in enumerate(valores):
-        ax.text(i, v, f'{v:.2f}', ha='center', va='bottom')
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:,.2f}',
+                ha='center', va='bottom')
     
+    plt.tight_layout()
+    return fig
+
+def analise_sensibilidade(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido):
+    resultados = {}
+    params = {
+        'valor_parcela': valor_parcela,
+        'percentual_agio': percentual_agio,
+        'tlr_anual': tlr_anual
+    }
+    
+    for param, base_value in params.items():
+        valores = [base_value * (1 + i * 0.1) for i in range(-2, 3)]
+        resultados[param] = [
+            calcular_consorcio(
+                valor_credito, valor_lance,
+                v if param == 'valor_parcela' else valor_parcela,
+                prazo,
+                v if param == 'percentual_agio' else percentual_agio,
+                v if param == 'tlr_anual' else tlr_anual,
+                ir, percentual_tempo_investido
+            )['resultado_liquido']
+            for v in valores
+        ]
+    
+    return resultados
+
+def plot_sensibilidade(analise):
+    fig, ax = plt.subplots(figsize=(12, 7))
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+    
+    for (param, valores), color in zip(analise.items(), colors):
+        ax.plot(range(-2, 3), valores, label=param, color=color, marker='o')
+    
+    ax.set_xlabel('Variação (%)')
+    ax.set_ylabel('Resultado Líquido (R$)')
+    ax.set_title('Análise de Sensibilidade')
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.7)
+    
+    plt.tight_layout()
     return fig
 
 def main():
-    st.title("FinanceX Prime - Análise de Consórcios")
+    st.set_page_config(page_title="FinanceX Prime", page_icon="", layout="wide")
+    st.title("FinanceX Prime - Análise Avançada de Consórcios")
 
     # Cenários predefinidos
     cenarios = {
@@ -139,37 +203,21 @@ def main():
         
         if resultado:
             st.subheader("Resultados da Análise")
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.write(f"Total pago em parcelas: {formatar_moeda(resultado['total_pago'])}")
                 st.write(f"Saldo devedor ao final: {formatar_moeda(resultado['saldo_devedor'])}")
                 st.write(f"Valor do ágio na venda: {formatar_moeda(resultado['valor_agio'])}")
-                st.write(f"Crédito novo: {formatar_moeda(resultado['credito_novo'])}")
             with col2:
-                st.write(f"Ganho com investimento parcial: {formatar_moeda(resultado['ganho_investimento'])}")
+                st.write(f"Crédito novo: {formatar_moeda(resultado['credito_novo'])}")
+                st.write(f"Ganho com investimento: {formatar_moeda(resultado['ganho_investimento'])}")
+                st.write(f"Custo do consórcio: {formatar_moeda(resultado['custo_consorcio'])}")
+            with col3:
                 st.write(f"Resultado líquido: {formatar_moeda(resultado['resultado_liquido'])}")
                 st.write(f"Investimento na TLR: {formatar_moeda(resultado['investimento_tlr'])}")
-                st.write(f"Relação parcela/crédito novo: {resultado['relacao_parcela_credito']:.2f}%")
-                st.write(f"Retorno necessário para igualar TLR: {resultado['retorno_necessario']:.2f}%")
+                st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
 
-            st.subheader("Análise Detalhada")
-            st.write("O resultado líquido representa o ganho total considerando o ágio na venda da carta, o ganho com investimento parcial e o custo do consórcio.")
-            st.write("A relação parcela/crédito novo indica o percentual que a parcela representa do crédito disponível após o lance.")
-            st.write("O retorno necessário para igualar a TLR é o percentual que o consórcio precisa render para ter o mesmo resultado que o investimento na Taxa Livre de Risco.")
-
-            st.subheader("Gráfico Comparativo")
-            fig = plot_comparativo(resultado)
-            st.pyplot(fig)
-
-            recomendacoes = gerar_recomendacoes(resultado)
-            st.subheader("Recomendações")
-            for rec in recomendacoes:
-                st.write(f"- {rec}")
-
-            st.subheader("Exportar Resultados")
-            st.markdown(exportar_csv(resultado), unsafe_allow_html=True)
-
-    st.sidebar.info(f"Versão: {VERSION}")
-
-if __name__ == "__main__":
-    main()
+            st.subheader("Métricas Adicionais")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.write(f"Relação parcela/cr
