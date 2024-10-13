@@ -217,9 +217,11 @@ def main():
                 st.write(f"Investimento na TLR: {formatar_moeda(resultado['investimento_tlr'])}")
                 st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
 
-             st.subheader("Métricas Adicionais")
+            st.subheader("Métricas Adicionais")
             col1, col2, col3 = st.columns(3)
             with col1:
+                st.write(f"Relação parcela/crédito novo: {resultado['relacao_parcela_credito']:.2f}%")
+                            with col1:
                 st.write(f"Relação parcela/crédito novo: {resultado['relacao_parcela_credito']:.2f}%")
                 st.write(f"Retorno necessário para igualar TLR: {resultado['retorno_necessario']:.2f}%")
             with col2:
