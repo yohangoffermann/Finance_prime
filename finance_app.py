@@ -217,7 +217,41 @@ def main():
                 st.write(f"Investimento na TLR: {formatar_moeda(resultado['investimento_tlr'])}")
                 st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
 
-            st.subheader("Métricas Adicionais")
+                        st.subheader("Métricas Adicionais")
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.write(f"Relação parcela/cr
+                st.write(f"Relação parcela/crédito novo: {resultado['relacao_parcela_credito']:.2f}%")
+                st.write(f"Retorno necessário para igualar TLR: {resultado['retorno_necessario']:.2f}%")
+            with col2:
+                st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
+                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}")
+            with col3:
+                st.write(f"Ganho do Consórcio: {formatar_moeda(resultado['ganho_consorcio'])}")
+                st.write(f"Diferença para TLR: {formatar_moeda(resultado['resultado_liquido'] - resultado['investimento_tlr'])}")
+
+            st.subheader("Análise Gráfica")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Comparativo: Consórcio vs. Investimento TLR")
+                fig_comparativo = plot_comparativo(resultado)
+                st.pyplot(fig_comparativo)
+            
+            with col2:
+                st.subheader("Análise de Sensibilidade")
+                analise_sens = analise_sensibilidade(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido)
+                fig_sensibilidade = plot_sensibilidade(analise_sens)
+                st.pyplot(fig_sensibilidade)
+
+            st.subheader("Recomendações")
+            recomendacoes = gerar_recomendacoes(resultado)
+            for rec in recomendacoes:
+                st.write(f"- {rec}")
+
+            st.subheader("Exportar Resultados")
+            st.markdown(exportar_csv(resultado), unsafe_allow_html=True)
+
+    st.sidebar.info(f"Versão: {VERSION}")
+    st.sidebar.warning("Este é um modelo simplificado para fins educacionais. Consulte um profissional financeiro para decisões reais.")
+
+if __name__ == "__main__":
+    main()
