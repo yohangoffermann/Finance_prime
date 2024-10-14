@@ -22,6 +22,10 @@ def format_input_currency(value):
         return format_currency(int(numeric_value) / 100)
     return "R$ 0,00"
 
+# Inicialização da sessão
+if 'dropdowns' not in st.session_state:
+    st.session_state.dropdowns = []
+
 # Novas funções para o Padrão Lance Embutido
 def calcular_lance_embutido(dnd, plt):
     lp = dnd * (plt / (Decimal('2') - plt))
@@ -81,19 +85,21 @@ def update_simulation():
     saldos_com_dropdowns = saldos_padrao.copy()
     saldo_atual = cl
     ultimo_mes_dropdown = 0
-    for dropdown in st.session_state.dropdowns:
-        mes = dropdown['mes']
-        valor = parse_currency(dropdown['valor'])
-        agio = Decimal(str(dropdown['agio']))
-        
-        saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes - ultimo_mes_dropdown)
-        saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
-        
-        for m in range(mes, prazo_meses + 1):
-            saldos_com_dropdowns[m] = calcular_saldo_devedor(saldo_apos_dropdown, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m - mes)
-        
-        saldo_atual = saldo_apos_dropdown
-        ultimo_mes_dropdown = mes
+    
+    if st.session_state.dropdowns:
+        for dropdown in st.session_state.dropdowns:
+            mes = dropdown['mes']
+            valor = parse_currency(dropdown['valor'])
+            agio = Decimal(str(dropdown['agio']))
+            
+            saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes - ultimo_mes_dropdown)
+            saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
+            
+            for m in range(mes, prazo_meses + 1):
+                saldos_com_dropdowns[m] = calcular_saldo_devedor(saldo_apos_dropdown, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m - mes)
+            
+            saldo_atual = saldo_apos_dropdown
+            ultimo_mes_dropdown = mes
 
     # Calcular saldo e parcela no momento do último dropdown
     if st.session_state.dropdowns:
@@ -103,7 +109,6 @@ def update_simulation():
         st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[ultimo_mes]
         st.session_state.parcela_com_dropdown = calcular_parcela(saldos_com_dropdowns[ultimo_mes], prazo_meses - ultimo_mes, taxa_admin_anual, indice_correcao_anual)
     else:
-        ultimo_mes = 0
         st.session_state.saldo_padrao_ultimo_dropdown = cl
         st.session_state.parcela_padrao = parcela_inicial
         st.session_state.saldo_com_dropdown_ultimo = cl
@@ -217,8 +222,7 @@ if 'ct' in st.session_state:
     with col1:
         parcela_vs_cl = st.session_state.parcela_padrao <= 0.005 * st.session_state.cl
         st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
-    with col2:
-        parcela_vs_dn = st.session_state.parcela_padrao <= 0.01 * parse_currency(st.session_state.dinheiro_novo_desejado)
+    with col2:        parcela_vs_dn = st.session_state.parcela_padrao <= 0.01 * parse_currency(st.session_state.dinheiro_novo_desejado)
         st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
     with col3:
         prazo_valido = st.session_state.prazo_meses >= 180
@@ -226,10 +230,6 @@ if 'ct' in st.session_state:
 
 # Seção de Dropdowns
 st.subheader("Simulação de Dropdowns")
-
-# Inicialização da lista de dropdowns
-if 'dropdowns' not in st.session_state:
-    st.session_state.dropdowns = []
 
 # Inputs para adicionar novo dropdown
 col1, col2, col3, col4 = st.columns(4)
