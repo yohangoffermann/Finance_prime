@@ -55,7 +55,7 @@ def update_simulation():
     saldos_padrao = [cl - (parcela_inicial * m) for m in range(prazo_meses + 1)]
     
     saldos_com_dropdowns = saldos_padrao.copy()
-    parcelas_restantes = prazo_meses
+    ultimo_mes_dropdown = 0
     
     for dropdown in st.session_state.dropdowns:
         mes = dropdown['mes']
@@ -64,20 +64,23 @@ def update_simulation():
         saldo_antes_dropdown = saldos_com_dropdowns[mes]
         saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor)
         
-        parcelas_restantes = max(1, (saldo_apos_dropdown / parcela_inicial).quantize(Decimal('1'), rounding=ROUND_UP))
-        
         for m in range(mes, prazo_meses + 1):
-            parcelas_passadas = m - mes
-            if parcelas_passadas < parcelas_restantes:
-                saldos_com_dropdowns[m] = saldo_apos_dropdown - (parcela_inicial * parcelas_passadas)
-            else:
-                saldos_com_dropdowns[m] = Decimal('0')
-    
+            saldos_com_dropdowns[m] = saldo_apos_dropdown - (parcela_inicial * (m - mes))
+        
+        ultimo_mes_dropdown = mes
+
     st.session_state.saldos_padrao = saldos_padrao
     st.session_state.saldos_com_dropdowns = saldos_com_dropdowns
+    
+    if st.session_state.dropdowns:
+        ultimo_mes = st.session_state.dropdowns[-1]['mes']
+        st.session_state.saldo_padrao_ultimo_dropdown = saldos_padrao[ultimo_mes]
+        st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[ultimo_mes]
+    else:
+        st.session_state.saldo_padrao_ultimo_dropdown = cl
+        st.session_state.saldo_com_dropdown_ultimo = cl
+
     st.session_state.parcela_padrao = parcela_inicial
-    st.session_state.saldo_padrao_ultimo = saldos_padrao[-1]
-    st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[-1]
 
     # Cálculo das relações percentuais
     st.session_state.relacao_parcela_cl = (parcela_inicial / cl * 100).quantize(Decimal('0.01'))
@@ -175,7 +178,7 @@ if 'ct' in st.session_state:
     st.subheader("Monitor de Amortização Tradicional")
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Saldo Devedor Atual", format_currency(st.session_state.saldo_padrao_ultimo))
+        st.metric("Saldo Devedor Atual", format_currency(st.session_state.saldo_padrao_ultimo_dropdown))
     with col2:
         st.metric("Parcela Atual", format_currency(st.session_state.parcela_padrao))
 
@@ -230,15 +233,15 @@ if st.session_state.dropdowns:
 st.subheader("Monitor de Amortização com Dropdowns")
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Saldo Devedor Final", format_currency(st.session_state.saldo_com_dropdown_ultimo))
+    st.metric("Saldo Devedor Atual", format_currency(st.session_state.saldo_com_dropdown_ultimo))
 with col2:
-    st.metric("Parcela Final", format_currency(st.session_state.parcela_padrao))
+    st.metric("Parcela Atual", format_currency(st.session_state.parcela_padrao))
 with col3:
     if st.session_state.saldo_com_dropdown_ultimo > 0:
         relacao_final = (st.session_state.parcela_padrao / st.session_state.saldo_com_dropdown_ultimo * 100).quantize(Decimal('0.01'))
-        st.metric("Relação Parcela/Saldo Final", f"{relacao_final}%")
+        st.metric("Relação Parcela/Saldo Atual", f"{relacao_final}%")
     else:
-        st.metric("Relação Parcela/Saldo Final", "N/A (Saldo Zero)")
+        st.metric("Relação Parcela/Saldo Atual", "N/A (Saldo Zero)")
 
 # Exibir eficiência e spread
 st.subheader("Eficiência e Spread")
@@ -260,4 +263,4 @@ st.write(f"Crédito Liberado: {format_currency(st.session_state.cl)}")
 custo_total_dropdowns = sum(parse_currency(d['valor']) * (Decimal('1') + Decimal(str(d['agio']))/Decimal('100')) for d in st.session_state.dropdowns)
 st.write(f"Custo Total dos Dropdowns (incluindo ágio): {format_currency(custo_total_dropdowns)}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v2.6")
+st.sidebar.info("Constructa - Módulo de Consórcio v2.7")
