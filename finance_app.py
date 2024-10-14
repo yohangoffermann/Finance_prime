@@ -206,11 +206,30 @@ def main():
             fig = plot_fluxos_com_oportunidades(fluxo_caixa, excedente, oportunidades_dropdown)
             st.pyplot(fig)
 
-        st.header("Oportunidades de Dropdown")
+            st.header("Oportunidades de Dropdown")
         if oportunidades_dropdown:
             oportunidades_df = pd.DataFrame(oportunidades_dropdown, columns=["Mês", "Valor Sugerido", "Benefício Estimado"])
             oportunidades_df["Valor Sugerido"] = oportunidades_df["Valor Sugerido"].apply(formatar_moeda)
             oportunidades_df["Benefício Estimado"] = oportunidades_df["Benefício Estimado"].apply(formatar_moeda)
             st.table(oportunidades_df)
         else:
-            st.write("Não foram identificadas oportunidades
+            st.write("Não foram identificadas oportunidades significativas de dropdown.")
+
+        st.header("Detalhamento do Fluxo de Caixa e Excedente")
+        df = pd.DataFrame({
+            'Mês': range(1, len(fluxo_caixa) + 1),
+            'Receitas': receitas + [0] * (len(fluxo_caixa) - len(receitas)),
+            'Despesas': despesas + [0] * (len(fluxo_caixa) - len(despesas)),
+            'Fluxo de Caixa': [formatar_moeda(valor) for valor in fluxo_caixa],
+            'Excedente Acumulado': [formatar_moeda(valor) for valor in excedente]
+        })
+        st.dataframe(df)
+
+        if parcela_inicial > (valor_total * 0.03):
+            st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
+
+    st.sidebar.info("Constructa - Versão Piloto")
+    st.sidebar.warning("Este é um modelo simplificado para fins de demonstração. Consulte um profissional financeiro para decisões reais.")
+
+if __name__ == "__main__":
+    main()
