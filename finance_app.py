@@ -54,77 +54,123 @@ def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
     novo_saldo = max(saldo_devedor - valor_efetivo, Decimal('0'))
     return novo_saldo.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-# Interface do usuário
-st.title("Constructa MVP")
+# Sidebar para inputs principais
+st.sidebar.title("Parâmetros do Projeto")
 
 # Módulo 1: Crédito Otimizado
-st.header("Módulo 1: Crédito Otimizado")
-valor_credito = st.number_input("Valor do Crédito", min_value=0.0, value=100000.0, step=1000.0)
-prazo_meses = st.number_input("Prazo (meses)", min_value=1, value=60, step=1)
-taxa_admin_anual = st.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=10.0, step=0.1)
-indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1)
-valor_lance = st.number_input("Valor do Lance", min_value=0.0, value=0.0, step=1000.0)
-
-if st.button("Calcular Parcela"):
-    parcela = calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual)
-    st.write(f"Parcela Mensal: R$ {parcela:.2f}")
-    
-    credito_novo = Decimal(str(valor_credito)) - Decimal(str(valor_lance))
-    relacao_parcela_credito = (parcela / credito_novo) * Decimal('100')
-    st.write(f"Relação Parcela/Crédito Novo: {relacao_parcela_credito:.2f}%")
+valor_credito = st.sidebar.number_input("Valor do Crédito (R$)", min_value=0.0, value=100000.0, step=1000.0)
+prazo_meses = st.sidebar.number_input("Prazo (meses)", min_value=1, value=60, step=1)
+taxa_admin_anual = st.sidebar.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=10.0, step=0.1)
+indice_correcao_anual = st.sidebar.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1)
+valor_lance = st.sidebar.number_input("Valor do Lance (R$)", min_value=0.0, value=0.0, step=1000.0)
 
 # Módulo 2: Dados do Empreendimento
-st.header("Módulo 2: Dados do Empreendimento")
-vgv = st.number_input("VGV (Valor Geral de Vendas)", min_value=0.0, value=1000000.0, step=10000.0)
-orcamento = st.number_input("Orçamento", min_value=0.0, value=800000.0, step=10000.0)
-prazo_empreendimento = st.number_input("Prazo do Empreendimento (meses)", min_value=1, value=24, step=1)
-perfil_vendas = st.selectbox("Perfil de Vendas", ['Linear', 'Front-loaded', 'Back-loaded'])
-perfil_despesas = st.selectbox("Perfil de Despesas", ['Linear', 'Front-loaded', 'Back-loaded'])
+vgv = st.sidebar.number_input("VGV (R$)", min_value=0.0, value=1000000.0, step=10000.0)
+orcamento = st.sidebar.number_input("Orçamento (R$)", min_value=0.0, value=800000.0, step=10000.0)
+prazo_empreendimento = st.sidebar.number_input("Prazo do Empreendimento (meses)", min_value=1, value=24, step=1)
 
-if st.button("Calcular Fluxo de Caixa"):
+# Corpo principal
+st.title("Constructa MVP")
+
+# Perfis de Despesas e Vendas
+col1, col2 = st.columns(2)
+with col1:
+    perfil_vendas = st.selectbox("Perfil de Vendas", ['Linear', 'Front-loaded', 'Back-loaded'])
+with col2:
+    perfil_despesas = st.selectbox("Perfil de Despesas", ['Linear', 'Front-loaded', 'Back-loaded'])
+
+# Cálculos e Exibição de Resultados
+if st.button("Calcular"):
+    parcela = calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual)
+    credito_novo = Decimal(str(valor_credito)) - Decimal(str(valor_lance))
+    relacao_parcela_credito = (parcela / credito_novo) * Decimal('100')
+    
     fluxo_caixa = calcular_fluxo_caixa(vgv, orcamento, prazo_empreendimento, perfil_vendas, perfil_despesas)
+    
+    # Exibição de resultados principais
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Parcela Mensal", f"R$ {parcela:.2f}")
+    with col2:
+        st.metric("Relação Parcela/Crédito Novo", f"{relacao_parcela_credito:.2f}%")
+    with col3:
+        st.metric("VPL do Fluxo de Caixa", f"R$ {sum(fluxo_caixa):.2f}")
+    
+    # Gráficos
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
+    
+    # Gráfico de amortização
+    meses = list(range(1, prazo_meses + 1))
+    saldos = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in meses]
+    ax1.plot(meses, saldos)
+    ax1.set_title("Amortização do Saldo Devedor")
+    ax1.set_xlabel("Meses")
+    ax1.set_ylabel("Saldo Devedor (R$)")
+    
+    # Gráfico de fluxo de caixa
+    ax2.bar(range(1, prazo_empreendimento + 1), fluxo_caixa)
+    ax2.set_title("Fluxo de Caixa do Empreendimento")
+    ax2.set_xlabel("Meses")
+    ax2.set_ylabel("Valor (R$)")
+    
+    st.pyplot(fig)
+    
+    # Tabela de fluxo de caixa
     df_fluxo = pd.DataFrame({
         'Mês': range(1, prazo_empreendimento + 1),
         'Fluxo de Caixa': fluxo_caixa
     })
-    st.line_chart(df_fluxo.set_index('Mês'))
     st.write(df_fluxo)
 
 # Módulo 3: Dropdown
-st.header("Módulo 3: Dropdown")
-valor_dropdown = st.number_input("Valor do Dropdown", min_value=0.0, value=50000.0, step=1000.0)
-agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1)
-mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, value=12, step=1)
+st.subheader("Simulação de Dropdown")
 
-if st.button("Simular Dropdown"):
-    saldo_original = calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, mes_dropdown)
-    novo_saldo = aplicar_dropdown(saldo_original, valor_dropdown, agio)
-    st.write(f"Saldo Original: R$ {saldo_original:.2f}")
-    st.write(f"Novo Saldo após Dropdown: R$ {novo_saldo:.2f}")
-    
-    prazo_restante = prazo_meses - mes_dropdown
-    nova_parcela = calcular_parcela(novo_saldo, prazo_restante, taxa_admin_anual, indice_correcao_anual)
-    st.write(f"Nova Parcela: R$ {nova_parcela:.2f}")
-    
-    economia_total = (Decimal(str(parcela)) * Decimal(str(prazo_meses))) - (nova_parcela * Decimal(str(prazo_restante)) + Decimal(str(valor_dropdown)))
-    st.write(f"Economia Total: R$ {economia_total:.2f}")
+# Lista para armazenar os dropdowns
+if 'dropdowns' not in st.session_state:
+    st.session_state.dropdowns = []
 
-# Visualizações
-st.header("Visualizações")
-if 'parcela' in locals() and 'nova_parcela' in locals():
-    fig, ax = plt.subplots()
-    meses = list(range(1, prazo_meses + 1))
-    saldos_originais = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in meses]
-    saldos_com_dropdown = saldos_originais[:mes_dropdown] + \
-                          [calcular_saldo_devedor(novo_saldo, nova_parcela, taxa_admin_anual, indice_correcao_anual, m - mes_dropdown) 
-                           for m in range(mes_dropdown, prazo_meses + 1)]
-    
-    ax.plot(meses, saldos_originais, label='Sem Dropdown')
-    ax.plot(meses, saldos_com_dropdown, label='Com Dropdown')
-    ax.set_xlabel('Meses')
-    ax.set_ylabel('Saldo Devedor')
-    ax.set_title('Amortização do Saldo Devedor')
-    ax.legend()
-    st.pyplot(fig)
+col1, col2, col3 = st.columns(3)
+with col1:
+    valor_dropdown = st.number_input("Valor do Dropdown (R$)", min_value=0.0, value=50000.0, step=1000.0)
+with col2:
+    agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1)
+with col3:
+    mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, value=12, step=1)
 
-st.sidebar.info("Constructa MVP - Versão 1.0.0")
+if st.button("Adicionar Dropdown"):
+    st.session_state.dropdowns.append({
+        "valor": valor_dropdown,
+        "agio": agio,
+        "mes": mes_dropdown
+    })
+
+# Exibir lista de dropdowns
+if st.session_state.dropdowns:
+    st.write("Dropdowns Adicionados:")
+    for i, dropdown in enumerate(st.session_state.dropdowns):
+        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+        with col1:
+            st.write(f"Dropdown {i+1}: R$ {dropdown['valor']:.2f}")
+        with col2:
+            st.write(f"Ágio: {dropdown['agio']}%")
+        with col3:
+            st.write(f"Mês: {dropdown['mes']}")
+        with col4:
+            if st.button(f"Remover {i+1}"):
+                st.session_state.dropdowns.pop(i)
+                st.experimental_rerun()
+
+# Recálculo com dropdowns
+if st.button("Recalcular com Dropdowns"):
+    saldo_atual = Decimal(str(valor_credito))
+    nova_parcela = parcela
+    for dropdown in sorted(st.session_state.dropdowns, key=lambda x: x['mes']):
+        saldo_atual = calcular_saldo_devedor(saldo_atual, nova_parcela, taxa_admin_anual, indice_correcao_anual, dropdown['mes'])
+        saldo_atual = aplicar_dropdown(saldo_atual, dropdown['valor'], dropdown['agio'])
+        prazo_restante = prazo_meses - dropdown['mes']
+        nova_parcela = calcular_parcela(saldo_atual, prazo_restante, taxa_admin_anual, indice_correcao_anual)
+    
+    st.metric("Nova Parcela após Dropdowns", f"R$ {nova_parcela:.2f}")
+    st.metric("Saldo Final", f"R$ {saldo_atual:.2f}")
+
+st.sidebar.info("Constructa MVP - Versão 1.0.1")
