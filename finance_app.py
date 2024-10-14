@@ -1,261 +1,123 @@
 import streamlit as st
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 
+# Funções de cálculo
+def calcular_relacao_parcela_credito(valor_cota, taxa_admin_anual, prazo_meses):
+    taxa_admin_mensal = taxa_admin_anual / 12 / 100
+    parcela = (valor_cota / prazo_meses) + (valor_cota * taxa_admin_mensal)
+    relacao = (parcela / valor_cota) * 100
+    return relacao
 
-VERSION = "1.3.0"
-
-def formatar_moeda(valor):
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-def calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido):
-    try:
-        valor_credito = float(valor_credito)
-        valor_lance = float(valor_lance)
-        valor_parcela = float(valor_parcela)
-        prazo = int(prazo)
-        percentual_agio = float(percentual_agio) / 100
-        tlr_anual = float(tlr_anual) / 100
-        ir = float(ir) / 100
-        percentual_tempo_investido = float(percentual_tempo_investido) / 100
-
-        if valor_lance >= valor_credito:
-            raise ValueError("O valor do lance deve ser menor que o valor do crédito.")
-
-        total_pago = valor_parcela * prazo
-        saldo_devedor = max(0, valor_credito - (valor_parcela * prazo))
-        valor_agio = saldo_devedor * percentual_agio
-        credito_novo = valor_credito - valor_lance
-
-        tlr_mensal = (1 + tlr_anual) ** (1 / 12) - 1
-        tempo_investido = prazo * percentual_tempo_investido
-        ganho_investimento = credito_novo * ((1 + tlr_mensal) ** tempo_investido - 1) * (1 - ir)
-
-        custo_consorcio = total_pago - valor_credito
-        resultado_liquido = valor_agio + ganho_investimento - custo_consorcio
-
-        investimento_tlr = valor_lance * ((1 + tlr_anual) ** (prazo / 12) - 1) * (1 - ir)
-
-        relacao_parcela_credito = (valor_parcela / credito_novo) * 100
-        retorno_necessario = max(0, (investimento_tlr - resultado_liquido) / credito_novo * 100)
-
-        fluxo_caixa = [-valor_lance] + [-valor_parcela] * (prazo - 1) + [valor_credito + valor_agio]
-        tir = irr(fluxo_caixa)
-        taxa_interna_retorno = max(0, (tir * 12 * 100))  # Convertendo para anual e percentual
-
-        indice_lucratividade = (valor_agio + ganho_investimento) / total_pago
-
-        return {
-            "total_pago": total_pago,
-            "saldo_devedor": saldo_devedor,
-            "valor_agio": valor_agio,
-            "credito_novo": credito_novo,
-            "ganho_investimento": ganho_investimento,
-            "custo_consorcio": custo_consorcio,
-            "resultado_liquido": resultado_liquido,
-            "investimento_tlr": investimento_tlr,
-            "relacao_parcela_credito": relacao_parcela_credito,
-            "retorno_necessario": retorno_necessario,
-            "taxa_interna_retorno": taxa_interna_retorno,
-            "indice_lucratividade": indice_lucratividade,
-            "tlr_anual": tlr_anual * 100
-        }
-    except Exception as e:
-        st.error(f"Ocorreu um erro: {str(e)}")
-        return None
-
-def sanity_checks(resultado):
-    checks = []
-    if resultado['saldo_devedor'] < 0:
-        checks.append("Saldo devedor negativo")
-    if resultado['custo_consorcio'] < 0:
-        checks.append("Custo do consórcio negativo")
-    if resultado['resultado_liquido'] > resultado['credito_novo'] * 2:
-        checks.append("Resultado líquido excessivamente alto")
-    if resultado['indice_lucratividade'] < 0 or resultado['indice_lucratividade'] > 3:
-        checks.append("Índice de Lucratividade fora da faixa esperada")
-    if resultado['taxa_interna_retorno'] < 0 or resultado['taxa_interna_retorno'] > 100:
-        checks.append("Taxa Interna de Retorno fora da faixa esperada")
-    return checks
-
-def gerar_recomendacoes(resultado):
-    recomendacoes = []
-    if resultado['resultado_liquido'] > resultado['investimento_tlr']:
-        recomendacoes.append(f"O consórcio é mais vantajoso que o investimento na TLR por {formatar_moeda(resultado['resultado_liquido'] - resultado['investimento_tlr'])}.")
-    else:
-        recomendacoes.append(f"O investimento na TLR é mais vantajoso que o consórcio por {formatar_moeda(resultado['investimento_tlr'] - resultado['resultado_liquido'])}.")
-
-    if resultado['relacao_parcela_credito'] > 2:
-        recomendacoes.append(f"A relação parcela/crédito novo de {resultado['relacao_parcela_credito']:.2f}% está alta. Considere reduzir o valor da parcela ou aumentar o lance.")
-
-    if resultado['retorno_necessario'] > 10:
-        recomendacoes.append(f"O retorno necessário de {resultado['retorno_necessario']:.2f}% para igualar a TLR é significativo. Avalie cuidadosamente os riscos e sua capacidade de obter este retorno.")
-
-    if resultado['taxa_interna_retorno'] > resultado['tlr_anual']:
-        recomendacoes.append(f"A taxa interna de retorno do consórcio ({resultado['taxa_interna_retorno']:.2f}%) é superior à TLR ({resultado['tlr_anual']:.2f}%), indicando uma boa oportunidade.")
-
-    if resultado['indice_lucratividade'] > 1:
-        recomendacoes.append(f"O índice de lucratividade de {resultado['indice_lucratividade']:.2f} indica que o consórcio é lucrativo.")
-    else:
-        recomendacoes.append(f"O índice de lucratividade de {resultado['indice_lucratividade']:.2f} indica que o consórcio não é lucrativo nas condições atuais.")
-
-    return recomendacoes
-
-def plot_comparativo(resultado):
-    labels = ['Consórcio', 'Investimento TLR']
-    valores = [resultado['resultado_liquido'], resultado['investimento_tlr']]
+def calcular_economia(valor_total, taxa_tradicional_anual, taxa_constructa_anual, prazo_meses):
+    taxa_tradicional_mensal = (1 + taxa_tradicional_anual/100)**(1/12) - 1
+    taxa_constructa_mensal = (1 + taxa_constructa_anual/100)**(1/12) - 1
     
-    fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.bar(labels, valores, color=['#1f77b4', '#ff7f0e'])
-    ax.set_ylabel('Valor (R$)')
-    ax.set_title('Comparativo: Consórcio vs. Investimento TLR')
+    custo_tradicional = valor_total * ((1 + taxa_tradicional_mensal)**prazo_meses - 1) / taxa_tradicional_mensal
+    custo_constructa = valor_total * ((1 + taxa_constructa_mensal)**prazo_meses - 1) / taxa_constructa_mensal
     
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{height:,.2f}',
-                ha='center', va='bottom')
-    
-    plt.tight_layout()
-    return fig
+    economia = custo_tradicional - custo_constructa
+    return economia
 
-def analise_sensibilidade(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido):
-    resultados = {}
-    params = {
-        'valor_parcela': valor_parcela,
-        'percentual_agio': percentual_agio,
-        'tlr_anual': tlr_anual
-    }
+def calcular_fluxo_caixa(valor_total, prazo_meses, percentual_lance, taxa_admin_anual):
+    lance = valor_total * (percentual_lance / 100)
+    credito_novo = valor_total - lance
+    taxa_admin_mensal = taxa_admin_anual / 12 / 100
+    parcela = (credito_novo / prazo_meses) + (valor_total * taxa_admin_mensal)
     
-    for param, base_value in params.items():
-        valores = [base_value * (1 + i * 0.1) for i in range(-2, 3)]
-        resultados[param] = [
-            calcular_consorcio(
-                valor_credito, valor_lance,
-                v if param == 'valor_parcela' else valor_parcela,
-                prazo,
-                v if param == 'percentual_agio' else percentual_agio,
-                v if param == 'tlr_anual' else tlr_anual,
-                ir, percentual_tempo_investido
-            )['resultado_liquido']
-            for v in valores
-        ]
+    fluxo_caixa = [-lance]  # Mês 0: pagamento do lance
+    for _ in range(prazo_meses):
+        fluxo_caixa.append(-parcela)
     
-    return resultados
+    return fluxo_caixa
 
-def plot_sensibilidade(analise):
-    fig, ax = plt.subplots(figsize=(12, 7))
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']
+def simular_dropdown(valor_total, prazo_meses, percentual_lance, taxa_admin_anual, mes_dropdown, percentual_dropdown):
+    fluxo_inicial = calcular_fluxo_caixa(valor_total, prazo_meses, percentual_lance, taxa_admin_anual)
     
-    for (param, valores), color in zip(analise.items(), colors):
-        ax.plot(range(-2, 3), valores, label=param, color=color, marker='o')
+    valor_dropdown = valor_total * (percentual_dropdown / 100)
+    parcela_apos_dropdown = ((valor_total - valor_dropdown) / prazo_meses) + (valor_total * taxa_admin_anual / 12 / 100)
     
-    ax.set_xlabel('Variação (%)')
-    ax.set_ylabel('Resultado Líquido (R$)')
-    ax.set_title('Análise de Sensibilidade')
-    ax.legend()
-    ax.grid(True, linestyle='--', alpha=0.7)
+    for i in range(mes_dropdown, prazo_meses):
+        fluxo_inicial[i] = -parcela_apos_dropdown
     
-    plt.tight_layout()
-    return fig
+    fluxo_inicial[mes_dropdown] += valor_dropdown  # Receita do dropdown
+    
+    return fluxo_inicial
 
 def main():
-    st.set_page_config(page_title="FinanceX Prime", page_icon="", layout="wide")
-    st.title("FinanceX Prime - Análise Avançada de Consórcios")
+    st.set_page_config(page_title="Constructa - Simulador de Crédito Otimizado", layout="wide")
+    st.title("Constructa - Simulador de Crédito Otimizado")
 
-    cenarios = {
-        "Conservador": {"valor_credito": 80000, "valor_lance": 10000, "valor_parcela": 800, "prazo": 60, "percentual_agio": 5, "tlr_anual": 4, "ir": 15, "percentual_tempo_investido": 30},
-        "Moderado": {"valor_credito": 100000, "valor_lance": 15000, "valor_parcela": 1000, "prazo": 72, "percentual_agio": 8, "tlr_anual": 5, "ir": 15, "percentual_tempo_investido": 50},
-        "Agressivo": {"valor_credito": 150000, "valor_lance": 25000, "valor_parcela": 1500, "prazo": 84, "percentual_agio": 12, "tlr_anual": 6, "ir": 15, "percentual_tempo_investido": 70}
-    }
+    # Entradas do usuário
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Dados do Projeto")
+        valor_projeto = st.number_input("Valor total do projeto (R$)", min_value=0.0, value=1000000.0, help="Insira o valor total do projeto")
+        prazo = st.number_input("Prazo do projeto (meses)", min_value=1, max_value=240, value=60, help="Insira o prazo do projeto em meses")
+        valor_terreno = st.number_input("Valor do terreno (R$, opcional)", min_value=0.0, value=0.0, help="Insira o valor do terreno, se aplicável")
 
-    cenario_selecionado = st.sidebar.selectbox("Selecione um cenário", ["Personalizado"] + list(cenarios.keys()))
+    with col2:
+        st.subheader("Dados do Consórcio")
+        valor_cota = st.number_input("Valor da cota (R$)", min_value=0.0, value=valor_projeto, help="Insira o valor da cota do consórcio")
+        num_cotas = st.number_input("Número de cotas", min_value=1, value=1, help="Insira o número de cotas do consórcio")
+        taxa_admin_anual = st.number_input("Taxa de administração anual (%)", min_value=0.0, max_value=100.0, value=10.0, help="Insira a taxa de administração anual do consórcio")
+        percentual_lance = st.number_input("Percentual de lance (%)", min_value=0.0, max_value=100.0, value=20.0, help="Insira o percentual de lance do consórcio")
 
-    if cenario_selecionado != "Personalizado":
-        valores = cenarios[cenario_selecionado]
-    else:
-        valores = {
-            "valor_credito": 100000.0,
-            "valor_lance": 0.0,
-            "valor_parcela": 1000.0,
-            "prazo": 60,
-            "percentual_agio": 10.0,
-            "tlr_anual": 5.0,
-            "ir": 15.0,
-            "percentual_tempo_investido": 50.0
-        }
+    st.subheader("Simulação de Dropdown")
+    mes_dropdown = st.number_input("Mês do dropdown", min_value=1, max_value=prazo, value=12, help="Insira o mês em que ocorrerá o dropdown")
+    percentual_dropdown = st.number_input("Percentual do dropdown (%)", min_value=0.0, max_value=100.0, value=30.0, help="Insira o percentual do dropdown")
 
-    st.sidebar.header("Parâmetros de Entrada")
-    valor_credito = st.sidebar.number_input("Valor total do crédito (R$)", min_value=1000.0, value=valores["valor_credito"], step=1000.0, help="Valor total do crédito do consórcio")
-    valor_lance = st.sidebar.number_input("Valor do lance (R$)", min_value=0.0, value=valores["valor_lance"], step=1000.0, help="Valor do lance oferecido no consórcio")
-    valor_parcela = st.sidebar.number_input("Valor da parcela mensal (R$)", min_value=10.0, value=valores["valor_parcela"], step=10.0, help="Valor da parcela mensal do consórcio")
-    prazo = st.sidebar.slider("Prazo total em meses", min_value=12, max_value=240, value=valores["prazo"], step=12, help="Prazo total do consórcio em meses")
-    percentual_agio = st.sidebar.number_input("Percentual de ágio na venda da carta (%)", min_value=0.0, max_value=100.0, value=valores["percentual_agio"], step=0.1, help="Percentual de ágio na venda da carta de crédito")
-    tlr_anual = st.sidebar.number_input("Taxa Livre de Risco (TLR) anual líquida (%)", min_value=0.1, max_value=20.0, value=valores["tlr_anual"], step=0.1, help="Taxa Livre de Risco anual líquida para comparação")
-    ir = st.sidebar.number_input("Imposto de Renda sobre investimentos (%)", min_value=0.0, max_value=100.0, value=valores["ir"], step=0.1, help="Percentual de Imposto de Renda sobre os investimentos")
-    percentual_tempo_investido = st.sidebar.number_input("Percentual do tempo com crédito investido na TLR (%)", min_value=0.0, max_value=100.0, value=valores["percentual_tempo_investido"], step=1.0, help="Percentual do tempo em que o crédito ficará investido na TLR")
+    if st.button("Calcular"):
+        # Cálculos
+        relacao_parcela_credito = calcular_relacao_parcela_credito(valor_cota, taxa_admin_anual, prazo)
+        economia_estimada = calcular_economia(valor_projeto, 12.0, taxa_admin_anual, prazo)  # 12% a.a. para financiamento tradicional
+        fluxo_caixa_sem_dropdown = calcular_fluxo_caixa(valor_projeto, prazo, percentual_lance, taxa_admin_anual)
+        fluxo_caixa_com_dropdown = simular_dropdown(valor_projeto, prazo, percentual_lance, taxa_admin_anual, mes_dropdown, percentual_dropdown)
 
-    if st.sidebar.button("Limpar"):
-        st.experimental_rerun()
-
-    if st.sidebar.button("Calcular"):
-        resultado = calcular_consorcio(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido)
+        # Exibição dos resultados
+        st.subheader("Resultados")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"Relação parcela/crédito novo: {relacao_parcela_credito:.2f}%")
+            st.write(f"Economia estimada: R$ {economia_estimada:,.2f}")
         
-        if resultado:
-            sanity_results = sanity_checks(resultado)
-            if sanity_results:
-                st.warning("Atenção: Os seguintes problemas foram detectados nos cálculos:")
-                for check in sanity_results:
-                    st.write(f"- {check}")
+        with col2:
+            st.write(f"Valor do lance: R$ {valor_projeto * (percentual_lance / 100):,.2f}")
+            st.write(f"Crédito novo: R$ {valor_projeto * (1 - percentual_lance / 100):,.2f}")
 
-            st.subheader("Resultados da Análise")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.write(f"Total pago em parcelas: {formatar_moeda(resultado['total_pago'])}")
-                st.write(f"Saldo devedor ao final: {formatar_moeda(resultado['saldo_devedor'])}")
-                st.write(f"Valor do ágio na venda: {formatar_moeda(resultado['valor_agio'])}")
-            with col2:
-                st.write(f"Crédito novo: {formatar_moeda(resultado['credito_novo'])}")
-                st.write(f"Ganho com investimento: {formatar_moeda(resultado['ganho_investimento'])}")
-                st.write(f"Custo do consórcio: {formatar_moeda(resultado['custo_consorcio'])}")
-            with col3:
-                st.write(f"Resultado líquido: {formatar_moeda(resultado['resultado_liquido'])}")
-                st.write(f"Investimento na TLR: {formatar_moeda(resultado['investimento_tlr'])}")
-                st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
+        # Fluxo de caixa
+        st.subheader("Fluxo de Caixa")
+        df_fluxo = pd.DataFrame({
+            'Mês': range(prazo + 1),
+            'Sem Dropdown': fluxo_caixa_sem_dropdown,
+            'Com Dropdown': fluxo_caixa_com_dropdown
+        })
+        st.dataframe(df_fluxo)
 
-            st.subheader("Métricas Adicionais")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.write(f"Relação parcela/crédito novo: {resultado['relacao_parcela_credito']:.2f}%")
-                st.write(f"Retorno necessário para igualar TLR: {resultado['retorno_necessario']:.2f}%")
-            with col2:
-                st.write(f"Taxa Interna de Retorno: {resultado['taxa_interna_retorno']:.2f}%")
-                st.write(f"Índice de Lucratividade: {resultado['indice_lucratividade']:.2f}")
-            with col3:
-                st.write(f"Ganho do Consórcio: {formatar_moeda(resultado['ganho_investimento'] + resultado['valor_agio'])}")
-                st.write(f"Diferença para TLR: {formatar_moeda(resultado['resultado_liquido'] - resultado['investimento_tlr'])}")
+        # Gráficos
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
 
-            st.subheader("Análise Gráfica")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.subheader("Comparativo: Consórcio vs. Investimento TLR")
-                fig_comparativo = plot_comparativo(resultado)
-                st.pyplot(fig_comparativo)
-            
-            with col2:
-                st.subheader("Análise de Sensibilidade")
-                analise_sens = analise_sensibilidade(valor_credito, valor_lance, valor_parcela, prazo, percentual_agio, tlr_anual, ir, percentual_tempo_investido)
-                fig_sensibilidade = plot_sensibilidade(analise_sens)
-                st.pyplot(fig_sensibilidade)
+        # Gráfico de barras comparando custos
+        custo_tradicional = valor_projeto + economia_estimada
+        custos = [custo_tradicional, valor_projeto]
+        labels = ['Financiamento Tradicional', 'Constructa']
+        ax1.bar(labels, custos)
+        ax1.set_ylabel('Custo Total (R$)')
+        ax1.set_title('Comparação de Custos')
+        for i, v in enumerate(custos):
+            ax1.text(i, v, f'R$ {v:,.2f}', ha='center', va='bottom')
 
-            st.subheader("Recomendações")
-            recomendacoes = gerar_recomendacoes(resultado)
-            for rec in recomendacoes:
-                st.write(f"- {rec}")
+        # Gráfico de linha mostrando evolução do fluxo de caixa
+        ax2.plot(df_fluxo['Mês'], df_fluxo['Sem Dropdown'], label='Sem Dropdown')
+        ax2.plot(df_fluxo['Mês'], df_fluxo['Com Dropdown'], label='Com Dropdown')
+        ax2.set_xlabel('Mês')
+        ax2.set_ylabel('Fluxo de Caixa (R$)')
+        ax2.set_title('Evolução do Fluxo de Caixa')
+        ax2.legend()
 
-    st.sidebar.info(f"Versão: {VERSION}")
-    st.sidebar.warning("Este é um modelo simplificado para fins educacionais. Consulte um profissional financeiro para decisões reais.")
+        st.pyplot(fig)
 
 if __name__ == "__main__":
     main()
