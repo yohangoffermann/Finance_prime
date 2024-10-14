@@ -207,8 +207,9 @@ with col4:
         if not any(d['mes'] == novo_mes_dropdown for d in st.session_state.dropdowns):
             st.session_state.dropdowns.append(novo_dropdown)
             st.session_state.dropdowns.sort(key=lambda x: x['mes'])
-            st.success(f"Dropdown de {novo_dropdown['valor']} adicionado com sucesso.")
             update_simulation()
+            st.success(f"Dropdown de {novo_dropdown['valor']} adicionado com sucesso.")
+            st.experimental_rerun()
         else:
             st.error(f"Já existe um dropdown no mês {novo_mes_dropdown}. Escolha outro mês.")
 
@@ -263,4 +264,4 @@ st.write(f"Crédito Liberado: {format_currency(st.session_state.cl)}")
 custo_total_dropdowns = sum(parse_currency(d['valor']) * (Decimal('1') + Decimal(str(d['agio']))/Decimal('100')) for d in st.session_state.dropdowns)
 st.write(f"Custo Total dos Dropdowns (incluindo ágio): {format_currency(custo_total_dropdowns)}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v2.7")
+st.sidebar.info("Constructa - Módulo de Consórcio v2.8")
