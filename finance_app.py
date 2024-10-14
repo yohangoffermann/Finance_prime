@@ -1,235 +1,130 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+from decimal import Decimal, ROUND_HALF_UP
 
-def formatar_moeda(valor):
-    return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+# Configuração da página
+st.set_page_config(page_title="Constructa MVP", layout="wide")
 
-def parse_moeda(valor_str):
-    try:
-        return float(valor_str.replace('R$', '').replace('.', '').replace(',', '.').strip())
-    except ValueError:
-        return 0.0
+# Funções de cálculo
+def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual):
+    valor_credito = Decimal(str(valor_credito))
+    prazo_meses = Decimal(str(prazo_meses))
+    taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
+    indice_correcao_mensal = (Decimal('1') + Decimal(str(indice_correcao_anual))/Decimal('100'))**(Decimal('1')/Decimal('12')) - Decimal('1')
+    fator = (Decimal('1') + indice_correcao_mensal) / (Decimal('1') - (Decimal('1') + indice_correcao_mensal)**(-prazo_meses))
+    parcela = valor_credito * (fator + taxa_admin_mensal)
+    return parcela.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-def input_moeda(label, value=0.0, key=None):
-    valor_str = st.sidebar.text_input(label, value=formatar_moeda(value), key=key)
-    return parse_moeda(valor_str)
+def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, meses_pagos):
+    valor_credito = Decimal(str(valor_credito))
+    parcela = Decimal(str(parcela))
+    taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
+    indice_correcao_mensal = (Decimal('1') + Decimal(str(indice_correcao_anual))/Decimal('100'))**(Decimal('1')/Decimal('12')) - Decimal('1')
+    saldo = valor_credito * (Decimal('1') + indice_correcao_mensal)**Decimal(str(meses_pagos))
+    for _ in range(meses_pagos):
+        saldo -= parcela - (saldo * taxa_admin_mensal)
+    return max(saldo, Decimal('0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-def calcular_parcela_consorcio(valor_credito, prazo_total, taxa_admin, percentual_lance, mes, indice_correcao):
-    valor_lance = valor_credito * (percentual_lance / 100)
-    credito_efetivo = valor_credito - valor_lance
-    anos_passados = mes // 12
-    valor_corrigido = credito_efetivo * (1 + indice_correcao/100) ** anos_passados
-    fundo_comum = valor_corrigido / (prazo_total - mes)
-    taxa_admin_valor = valor_credito * (taxa_admin / 100 / 12)  # Taxa de admin sobre o valor total
-    return fundo_comum + taxa_admin_valor
-
-def simular_fluxo_caixa(valor_total, prazo_projeto, prazo_consorcio, taxa_admin, percentual_lance, indice_correcao, receitas, despesas, dropdowns):
-    lance = valor_total * (percentual_lance / 100)
-    fluxo_caixa = [-lance]
-    saldo_devedor = valor_total - lance
-
-    for mes in range(1, max(prazo_projeto, prazo_consorcio) + 1):
-        parcela = calcular_parcela_consorcio(valor_total, prazo_consorcio, taxa_admin, percentual_lance, mes-1, indice_correcao) if mes <= prazo_consorcio else 0
-        receita = receitas[mes-1] if mes <= prazo_projeto else 0
-        despesa = despesas[mes-1] if mes <= prazo_projeto else 0
-        
-        fluxo = receita - despesa - parcela
-        
-        for drop_mes, drop_valor in dropdowns:
-            if mes == drop_mes:
-                fluxo += drop_valor
-                saldo_devedor -= drop_valor
-
-        fluxo_caixa.append(fluxo)
-
+def calcular_fluxo_caixa(vgv, orcamento, prazo, perfil_vendas, perfil_despesas):
+    receitas = gerar_perfil(vgv, prazo, perfil_vendas)
+    despesas = gerar_perfil(orcamento, prazo, perfil_despesas)
+    fluxo_caixa = [receitas[i] - despesas[i] for i in range(prazo)]
     return fluxo_caixa
 
-def calcular_vpn(taxa, fluxos):
-    return sum(fluxo / (1 + taxa) ** i for i, fluxo in enumerate(fluxos))
+def gerar_perfil(valor_total, prazo, perfil):
+    valor_total = Decimal(str(valor_total))
+    prazo = Decimal(str(prazo))
+    if perfil == 'Linear':
+        return [valor_total / prazo] * int(prazo)
+    elif perfil == 'Front-loaded':
+        meio = int(prazo) // 2
+        return [valor_total * Decimal('0.6') / Decimal(str(meio))] * meio + \
+               [valor_total * Decimal('0.4') / (prazo - Decimal(str(meio)))] * (int(prazo) - meio)
+    elif perfil == 'Back-loaded':
+        meio = int(prazo) // 2
+        return [valor_total * Decimal('0.4') / Decimal(str(meio))] * meio + \
+               [valor_total * Decimal('0.6') / (prazo - Decimal(str(meio)))] * (int(prazo) - meio)
 
-def calcular_economia(valor_total, taxa_tradicional, prazo_projeto, fluxo_caixa_constructa):
-    taxa_mensal = (1 + taxa_tradicional/100)**(1/12) - 1
-    parcela_tradicional = valor_total * (taxa_mensal * (1 + taxa_mensal)**prazo_projeto) / ((1 + taxa_mensal)**prazo_projeto - 1)
-    fluxo_tradicional = [-parcela_tradicional] * prazo_projeto
+def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
+    saldo_devedor = Decimal(str(saldo_devedor))
+    valor_dropdown = Decimal(str(valor_dropdown))
+    agio = Decimal(str(agio))
+    valor_efetivo = valor_dropdown * (Decimal('1') + agio/Decimal('100'))
+    novo_saldo = max(saldo_devedor - valor_efetivo, Decimal('0'))
+    return novo_saldo.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+# Interface do usuário
+st.title("Constructa MVP")
+
+# Módulo 1: Crédito Otimizado
+st.header("Módulo 1: Crédito Otimizado")
+valor_credito = st.number_input("Valor do Crédito", min_value=0.0, value=100000.0, step=1000.0)
+prazo_meses = st.number_input("Prazo (meses)", min_value=1, value=60, step=1)
+taxa_admin_anual = st.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=10.0, step=0.1)
+indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1)
+valor_lance = st.number_input("Valor do Lance", min_value=0.0, value=0.0, step=1000.0)
+
+if st.button("Calcular Parcela"):
+    parcela = calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual)
+    st.write(f"Parcela Mensal: R$ {parcela:.2f}")
     
-    vpn_constructa = calcular_vpn(taxa_mensal, fluxo_caixa_constructa)
-    vpn_tradicional = calcular_vpn(taxa_mensal, fluxo_tradicional)
+    credito_novo = Decimal(str(valor_credito)) - Decimal(str(valor_lance))
+    relacao_parcela_credito = (parcela / credito_novo) * Decimal('100')
+    st.write(f"Relação Parcela/Crédito Novo: {relacao_parcela_credito:.2f}%")
+
+# Módulo 2: Dados do Empreendimento
+st.header("Módulo 2: Dados do Empreendimento")
+vgv = st.number_input("VGV (Valor Geral de Vendas)", min_value=0.0, value=1000000.0, step=10000.0)
+orcamento = st.number_input("Orçamento", min_value=0.0, value=800000.0, step=10000.0)
+prazo_empreendimento = st.number_input("Prazo do Empreendimento (meses)", min_value=1, value=24, step=1)
+perfil_vendas = st.selectbox("Perfil de Vendas", ['Linear', 'Front-loaded', 'Back-loaded'])
+perfil_despesas = st.selectbox("Perfil de Despesas", ['Linear', 'Front-loaded', 'Back-loaded'])
+
+if st.button("Calcular Fluxo de Caixa"):
+    fluxo_caixa = calcular_fluxo_caixa(vgv, orcamento, prazo_empreendimento, perfil_vendas, perfil_despesas)
+    df_fluxo = pd.DataFrame({
+        'Mês': range(1, prazo_empreendimento + 1),
+        'Fluxo de Caixa': fluxo_caixa
+    })
+    st.line_chart(df_fluxo.set_index('Mês'))
+    st.write(df_fluxo)
+
+# Módulo 3: Dropdown
+st.header("Módulo 3: Dropdown")
+valor_dropdown = st.number_input("Valor do Dropdown", min_value=0.0, value=50000.0, step=1000.0)
+agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1)
+mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, value=12, step=1)
+
+if st.button("Simular Dropdown"):
+    saldo_original = calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, mes_dropdown)
+    novo_saldo = aplicar_dropdown(saldo_original, valor_dropdown, agio)
+    st.write(f"Saldo Original: R$ {saldo_original:.2f}")
+    st.write(f"Novo Saldo após Dropdown: R$ {novo_saldo:.2f}")
     
-    return vpn_tradicional - vpn_constructa  # Economia é a diferença entre os VPNs
-
-def identificar_oportunidades_dropdown(fluxo_caixa, excedente, prazo_projeto, prazo_consorcio, valor_total, percentual_lance):
-    oportunidades = []
-    saldo_devedor = valor_total * (1 - percentual_lance / 100)
-    agio = 0.25  # 25% de ágio
-
-    for mes in range(prazo_projeto):
-        if mes > 0 and excedente[mes] > excedente[mes-1] and excedente[mes] > 0:
-            valor_disponivel = min(excedente[mes], saldo_devedor * 0.1)  # Limita o dropdown a 10% do saldo devedor
-            if valor_disponivel > valor_total * 0.05:  # Só considera dropdowns significativos (> 5% do valor total)
-                beneficio = valor_disponivel * agio
-                oportunidades.append((mes, valor_disponivel, beneficio))
-                saldo_devedor -= valor_disponivel
-
-    return oportunidades
-
-def plot_fluxos_com_oportunidades(fluxo_caixa, excedente, oportunidades):
-    fig, ax1 = plt.subplots(figsize=(12, 6))
+    prazo_restante = prazo_meses - mes_dropdown
+    nova_parcela = calcular_parcela(novo_saldo, prazo_restante, taxa_admin_anual, indice_correcao_anual)
+    st.write(f"Nova Parcela: R$ {nova_parcela:.2f}")
     
-    ax1.plot(range(len(fluxo_caixa)), fluxo_caixa, marker='o', color='b', label='Fluxo de Caixa')
-    ax1.set_xlabel("Mês")
-    ax1.set_ylabel("Fluxo de Caixa (R$)", color='b')
-    ax1.tick_params(axis='y', labelcolor='b')
+    economia_total = (Decimal(str(parcela)) * Decimal(str(prazo_meses))) - (nova_parcela * Decimal(str(prazo_restante)) + Decimal(str(valor_dropdown)))
+    st.write(f"Economia Total: R$ {economia_total:.2f}")
 
-    ax2 = ax1.twinx()
-    ax2.plot(range(len(excedente)), excedente, color='r', label='Excedente Acumulado')
-    ax2.set_ylabel("Excedente Acumulado (R$)", color='r')
-    ax2.tick_params(axis='y', labelcolor='r')
+# Visualizações
+st.header("Visualizações")
+if 'parcela' in locals() and 'nova_parcela' in locals():
+    fig, ax = plt.subplots()
+    meses = list(range(1, prazo_meses + 1))
+    saldos_originais = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in meses]
+    saldos_com_dropdown = saldos_originais[:mes_dropdown] + \
+                          [calcular_saldo_devedor(novo_saldo, nova_parcela, taxa_admin_anual, indice_correcao_anual, m - mes_dropdown) 
+                           for m in range(mes_dropdown, prazo_meses + 1)]
+    
+    ax.plot(meses, saldos_originais, label='Sem Dropdown')
+    ax.plot(meses, saldos_com_dropdown, label='Com Dropdown')
+    ax.set_xlabel('Meses')
+    ax.set_ylabel('Saldo Devedor')
+    ax.set_title('Amortização do Saldo Devedor')
+    ax.legend()
+    st.pyplot(fig)
 
-    for mes, valor, _ in oportunidades:
-        ax1.axvline(x=mes, color='g', linestyle='--', alpha=0.5)
-        ax1.text(mes, ax1.get_ylim()[1], f'Dropdown R${valor:,.0f}', rotation=90, verticalalignment='top')
-
-    fig.tight_layout()
-    return fig
-
-def linspace(start, stop, num):
-    step = (stop - start) / (num - 1)
-    return [start + i * step for i in range(num)]
-
-def gerar_perfil(perfil, valor_total, prazo):
-    if perfil == "Uniforme":
-        return [valor_total / prazo] * prazo
-    elif perfil == "Crescente":
-        return linspace(valor_total / (prazo * 1.5), valor_total * 1.5 / prazo, prazo)
-    elif perfil == "Concentrado no Fim":
-        return [valor_total / (prazo * 2)] * (prazo // 2) + [valor_total * 1.5 / (prazo // 2)] * (prazo - prazo // 2)
-    elif perfil == "Concentrado no Início":
-        return [valor_total * 1.5 / (prazo // 2)] * (prazo // 2) + [valor_total / (prazo * 2)] * (prazo - prazo // 2)
-    elif perfil == "Decrescente":
-        return linspace(valor_total * 1.5 / prazo, valor_total / (prazo * 1.5), prazo)
-
-def cumsum(lst):
-    total = 0
-    result = []
-    for value in lst:
-        total += value
-        result.append(total)
-    return result
-
-def main():
-    st.set_page_config(page_title="Constructa - Simulador de Crédito Otimizado", layout="wide")
-    st.title("Constructa - Simulador de Crédito Otimizado")
-
-    cenario = st.sidebar.selectbox("Escolha um cenário base", ["Personalizado", "Conservador", "Moderado", "Otimista"])
-
-    if cenario == "Conservador":
-        default_values = {
-            "valor_total": 5000000.0, "prazo_projeto": 48, "prazo_consorcio": 200,
-            "percentual_lance": 15.0, "taxa_admin": 1.5, "indice_correcao": 6.0,
-            "taxa_tradicional": 14.0, "perfil_receita": "Concentrado no Fim",
-            "perfil_despesa": "Concentrado no Início"
-        }
-    elif cenario == "Moderado":
-        default_values = {
-            "valor_total": 10000000.0, "prazo_projeto": 54, "prazo_consorcio": 220,
-            "percentual_lance": 20.0, "taxa_admin": 1.2, "indice_correcao": 5.0,
-            "taxa_tradicional": 12.0, "perfil_receita": "Uniforme",
-            "perfil_despesa": "Uniforme"
-        }
-    elif cenario == "Otimista":
-        default_values = {
-            "valor_total": 15000000.0, "prazo_projeto": 60, "prazo_consorcio": 240,
-            "percentual_lance": 25.0, "taxa_admin": 1.0, "indice_correcao": 4.0,
-            "taxa_tradicional": 10.0, "perfil_receita": "Crescente",
-            "perfil_despesa": "Decrescente"
-        }
-    else:
-        default_values = {
-            "valor_total": 10000000.0, "prazo_projeto": 48, "prazo_consorcio": 220,
-            "percentual_lance": 20.0, "taxa_admin": 1.2, "indice_correcao": 5.0,
-            "taxa_tradicional": 12.0, "perfil_receita": "Uniforme",
-            "perfil_despesa": "Uniforme"
-        }
-
-    st.sidebar.header("Parâmetros Essenciais")
-    valor_total = input_moeda("Valor Total do Projeto (R$)", value=default_values["valor_total"], key="valor_total")
-    prazo_projeto = st.sidebar.slider("Prazo do Projeto (meses)", min_value=36, max_value=60, value=default_values["prazo_projeto"])
-    prazo_consorcio = st.sidebar.slider("Prazo do Consórcio (meses)", min_value=180, max_value=240, value=default_values["prazo_consorcio"])
-    percentual_lance = st.sidebar.slider("Percentual de Lance (%)", min_value=0.0, max_value=50.0, value=float(default_values["percentual_lance"]), step=0.1)
-
-    mostrar_avancado = st.sidebar.checkbox("Mostrar parâmetros avançados")
-
-    if mostrar_avancado:
-        st.sidebar.header("Parâmetros Avançados")
-        taxa_admin = st.sidebar.slider("Taxa de Administração Anual (%)", min_value=0.1, max_value=20.0, value=float(default_values["taxa_admin"]), step=0.1)
-        indice_correcao = st.sidebar.slider("Índice de Correção Anual (%)", min_value=0.0, max_value=15.0, value=float(default_values["indice_correcao"]), step=0.1)
-        taxa_tradicional = st.sidebar.slider("Taxa de Juros Tradicional (% a.a.)", min_value=1.0, max_value=20.0, value=float(default_values["taxa_tradicional"]), step=0.1)
-    else:
-        taxa_admin = default_values["taxa_admin"]
-        indice_correcao = default_values["indice_correcao"]
-        taxa_tradicional = default_values["taxa_tradicional"]
-
-    perfil_receita = st.sidebar.selectbox("Perfil de Receitas", ["Uniforme", "Crescente", "Concentrado no Fim"], index=["Uniforme", "Crescente", "Concentrado no Fim"].index(default_values["perfil_receita"]))
-    perfil_despesa = st.sidebar.selectbox("Perfil de Despesas", ["Uniforme", "Concentrado no Início", "Decrescente"], index=["Uniforme", "Concentrado no Início", "Decrescente"].index(default_values["perfil_despesa"]))
-
-    receitas = gerar_perfil(perfil_receita, valor_total * 1.3, prazo_projeto)
-    despesas = gerar_perfil(perfil_despesa, valor_total * 0.8, prazo_projeto)
-
-    if st.sidebar.button("Calcular"):
-        if percentual_lance >= 100:
-            st.error("O percentual de lance não pode ser 100% ou maior.")
-            return
-
-        fluxo_caixa = simular_fluxo_caixa(valor_total, prazo_projeto, prazo_consorcio, taxa_admin, percentual_lance, indice_correcao, receitas, despesas, [])
-        excedente = cumsum(fluxo_caixa)
-        economia = calcular_economia(valor_total, taxa_tradicional, prazo_projeto, fluxo_caixa)
-
-        oportunidades_dropdown = identificar_oportunidades_dropdown(fluxo_caixa, excedente, prazo_projeto, prazo_consorcio, valor_total, percentual_lance)
-
-        parcela_inicial = calcular_parcela_consorcio(valor_total, prazo_consorcio, taxa_admin, percentual_lance, 0, indice_correcao)
-        valor_lance = valor_total * (percentual_lance / 100)
-        credito_efetivo = valor_total - valor_lance
-
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.header("Resultados")
-            st.write(f"Parcela Inicial: {formatar_moeda(parcela_inicial)}")
-            st.write(f"Economia Total Estimada: {formatar_moeda(economia)}")
-            st.write(f"Valor do Lance: {formatar_moeda(valor_lance)}")
-            st.write(f"Crédito Efetivo: {formatar_moeda(credito_efetivo)}")
-            st.write(f"Relação Parcela/Crédito Novo: {(parcela_inicial / credito_efetivo) * 100:.2f}%")
-
-        with col2:
-            st.header("Fluxo de Caixa e Excedente")
-            fig = plot_fluxos_com_oportunidades(fluxo_caixa, excedente, oportunidades_dropdown)
-            st.pyplot(fig)
-
-            st.header("Oportunidades de Dropdown")
-        if oportunidades_dropdown:
-            oportunidades_df = pd.DataFrame(oportunidades_dropdown, columns=["Mês", "Valor Sugerido", "Benefício Estimado"])
-            oportunidades_df["Valor Sugerido"] = oportunidades_df["Valor Sugerido"].apply(formatar_moeda)
-            oportunidades_df["Benefício Estimado"] = oportunidades_df["Benefício Estimado"].apply(formatar_moeda)
-            st.table(oportunidades_df)
-        else:
-            st.write("Não foram identificadas oportunidades significativas de dropdown.")
-
-        st.header("Detalhamento do Fluxo de Caixa e Excedente")
-        df = pd.DataFrame({
-            'Mês': range(1, len(fluxo_caixa) + 1),
-            'Receitas': receitas + [0] * (len(fluxo_caixa) - len(receitas)),
-            'Despesas': despesas + [0] * (len(fluxo_caixa) - len(despesas)),
-            'Fluxo de Caixa': [formatar_moeda(valor) for valor in fluxo_caixa],
-            'Excedente Acumulado': [formatar_moeda(valor) for valor in excedente]
-        })
-        st.dataframe(df)
-
-        if parcela_inicial > (valor_total * 0.03):
-            st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
-
-    st.sidebar.info("Constructa - Versão Piloto")
-    st.sidebar.warning("Este é um modelo simplificado para fins de demonstração. Consulte um profissional financeiro para decisões reais.")
-
-if __name__ == "__main__":
-    main()
+st.sidebar.info("Constructa MVP - Versão 1.0.0")
