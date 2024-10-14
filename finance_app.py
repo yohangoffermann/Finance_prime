@@ -72,11 +72,11 @@ def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
 st.sidebar.title("Parâmetros do Projeto")
 
 # Módulo 1: Crédito Otimizado
-valor_credito = st.sidebar.text_input("Valor do Crédito", value="R$ 1.000.000,00")
+valor_credito = st.sidebar.text_input("Valor do Crédito", value="R$ 10.000.000,00")
 prazo_meses = st.sidebar.number_input("Prazo (meses)", min_value=1, value=60, step=1)
-taxa_admin_anual = st.sidebar.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=10.0, step=0.1)
+taxa_admin_anual = st.sidebar.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=1.20, step=0.01)
 indice_correcao_anual = st.sidebar.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1)
-valor_lance = st.sidebar.text_input("Valor do Lance", value="R$ 100.000,00")
+valor_lance = st.sidebar.text_input("Valor do Lance", value="R$ 2.000.000,00")
 
 # Módulo 2: Dados do Empreendimento
 vgv = st.sidebar.text_input("VGV", value="R$ 10.000.000,00")
@@ -95,53 +95,62 @@ with col2:
 
 # Cálculos e Exibição de Resultados
 if st.button("Calcular"):
-    valor_credito = parse_currency(valor_credito)
-    valor_lance = parse_currency(valor_lance)
-    vgv = parse_currency(vgv)
-    orcamento = parse_currency(orcamento)
+    try:
+        valor_credito = parse_currency(valor_credito)
+        valor_lance = parse_currency(valor_lance)
+        vgv = parse_currency(vgv)
+        orcamento = parse_currency(orcamento)
 
-    parcela = calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual)
-    credito_novo = valor_credito - valor_lance
-    relacao_parcela_credito = (parcela / credito_novo) * Decimal('100')
-    
-    fluxo_caixa = calcular_fluxo_caixa(vgv, orcamento, prazo_empreendimento, perfil_vendas, perfil_despesas)
-    
-    # Exibição de resultados principais
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Parcela Mensal", format_currency(parcela))
-    with col2:
-        st.metric("Relação Parcela/Crédito Novo", f"{relacao_parcela_credito:.2f}%")
-    with col3:
-        st.metric("VPL do Fluxo de Caixa", format_currency(sum(fluxo_caixa)))
-    
-    # Gráficos
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
-    
-    # Gráfico de amortização
-    meses = list(range(1, prazo_meses + 1))
-    saldos = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in meses]
-    ax1.plot(meses, saldos)
-    ax1.set_title("Amortização do Saldo Devedor")
-    ax1.set_xlabel("Meses")
-    ax1.set_ylabel("Saldo Devedor (R$)")
-    ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
-    
-    # Gráfico de fluxo de caixa
-    ax2.bar(range(1, prazo_empreendimento + 1), fluxo_caixa)
-    ax2.set_title("Fluxo de Caixa do Empreendimento")
-    ax2.set_xlabel("Meses")
-    ax2.set_ylabel("Valor (R$)")
-    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
-    
-    st.pyplot(fig)
-    
-    # Tabela de fluxo de caixa
-    df_fluxo = pd.DataFrame({
-        'Mês': range(1, prazo_empreendimento + 1),
-        'Fluxo de Caixa': [format_currency(fc) for fc in fluxo_caixa]
-    })
-    st.write(df_fluxo)
+        parcela = calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual)
+        credito_novo = valor_credito - valor_lance
+        relacao_parcela_credito = (parcela / credito_novo) * Decimal('100')
+        
+        fluxo_caixa = calcular_fluxo_caixa(vgv, orcamento, prazo_empreendimento, perfil_vendas, perfil_despesas)
+        
+        # Exibição de resultados principais
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Parcela Mensal", format_currency(parcela))
+        with col2:
+            st.metric("Relação Parcela/Crédito Novo", f"{relacao_parcela_credito:.2f}%")
+        with col3:
+            st.metric("VPL do Fluxo de Caixa", format_currency(sum(fluxo_caixa)))
+        
+        # Verificações de sanidade
+        if relacao_parcela_credito > 100:
+            st.warning("Atenção: A relação Parcela/Crédito Novo está acima de 100%.")
+        if parcela > credito_novo / 10:
+            st.warning("Atenção: O valor da parcela parece estar muito alto em relação ao crédito novo.")
+        
+        # Gráficos
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
+        
+        # Gráfico de amortização
+        meses = list(range(1, prazo_meses + 1))
+        saldos = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in meses]
+        ax1.plot(meses, saldos)
+        ax1.set_title("Amortização do Saldo Devedor")
+        ax1.set_xlabel("Meses")
+        ax1.set_ylabel("Saldo Devedor (R$)")
+        ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
+        
+        # Gráfico de fluxo de caixa
+        ax2.bar(range(1, prazo_empreendimento + 1), fluxo_caixa)
+        ax2.set_title("Fluxo de Caixa do Empreendimento")
+        ax2.set_xlabel("Meses")
+        ax2.set_ylabel("Valor (R$)")
+        ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
+        
+        st.pyplot(fig)
+        
+        # Tabela de fluxo de caixa
+        df_fluxo = pd.DataFrame({
+            'Mês': range(1, prazo_empreendimento + 1),
+            'Fluxo de Caixa': [format_currency(fc) for fc in fluxo_caixa]
+        })
+        st.write(df_fluxo)
+    except Exception as e:
+        st.error(f"Ocorreu um erro nos cálculos: {str(e)}")
 
 # Módulo 3: Dropdown
 st.subheader("Simulação de Dropdown")
@@ -183,15 +192,18 @@ if st.session_state.dropdowns:
 
 # Recálculo com dropdowns
 if st.button("Recalcular com Dropdowns"):
-    saldo_atual = valor_credito
-    nova_parcela = parcela
-    for dropdown in sorted(st.session_state.dropdowns, key=lambda x: x['mes']):
-        saldo_atual = calcular_saldo_devedor(saldo_atual, nova_parcela, taxa_admin_anual, indice_correcao_anual, dropdown['mes'])
-        saldo_atual = aplicar_dropdown(saldo_atual, dropdown['valor'], dropdown['agio'])
-        prazo_restante = prazo_meses - dropdown['mes']
-        nova_parcela = calcular_parcela(saldo_atual, prazo_restante, taxa_admin_anual, indice_correcao_anual)
-    
-    st.metric("Nova Parcela após Dropdowns", format_currency(nova_parcela))
-    st.metric("Saldo Final", format_currency(saldo_atual))
+    try:
+        saldo_atual = valor_credito
+        nova_parcela = parcela
+        for dropdown in sorted(st.session_state.dropdowns, key=lambda x: x['mes']):
+            saldo_atual = calcular_saldo_devedor(saldo_atual, nova_parcela, taxa_admin_anual, indice_correcao_anual, dropdown['mes'])
+            saldo_atual = aplicar_dropdown(saldo_atual, dropdown['valor'], dropdown['agio'])
+            prazo_restante = prazo_meses - dropdown['mes']
+            nova_parcela = calcular_parcela(saldo_atual, prazo_restante, taxa_admin_anual, indice_correcao_anual)
+        
+        st.metric("Nova Parcela após Dropdowns", format_currency(nova_parcela))
+        st.metric("Saldo Final", format_currency(saldo_atual))
+    except Exception as e:
+        st.error(f"Ocorreu um erro no recálculo com dropdowns: {str(e)}")
 
-st.sidebar.info("Constructa MVP - Versão 1.0.4")
+st.sidebar.info("Constructa MVP - Versão 1.0.5")
