@@ -2,105 +2,126 @@ import streamlit as st
 import plotly.graph_objects as go
 from decimal import Decimal, ROUND_HALF_UP
 
+# Configuração da página
+st.set_page_config(page_title="Constructa - Módulo de Consórcio", layout="wide")
+
+# Funções auxiliares
 def format_currency(value):
     return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 def parse_currency(value):
-    try:
-        return Decimal(value.replace('R$', '').replace('.', '').replace(',', '.').strip())
-    except:
-        return Decimal('0')
+    if isinstance(value, (int, float, Decimal)):
+        return Decimal(str(value))
+    return Decimal(value.replace('R$', '').replace('.', '').replace(',', '.').strip())
 
-def calcular_relacao_parcela_credito(parcela, credito):
-    return (parcela / credito * 100).quantize(Decimal('0.0001'))
+# Funções de cálculo
+def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual):
+    valor_credito = Decimal(str(valor_credito))
+    prazo_meses = Decimal(str(prazo_meses))
+    taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
+    
+    parcela_fundo = valor_credito / prazo_meses
+    parcela_admin = valor_credito * taxa_admin_mensal
+    return (parcela_fundo + parcela_admin).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-def aplicar_dropdown(saldo, valor_dropdown, agio):
+def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, meses_pagos):
+    valor_credito = Decimal(str(valor_credito))
+    parcela = Decimal(str(parcela))
+    taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
+    indice_correcao_anual = Decimal(str(indice_correcao_anual)) / Decimal('100')
+    
+    saldo = valor_credito
+    for mes in range(1, meses_pagos + 1):
+        if mes % 12 == 1 and mes > 12:  # Aplica correção no início de cada ano, a partir do segundo ano
+            saldo *= (1 + indice_correcao_anual)
+        
+        amortizacao = parcela - (saldo * taxa_admin_mensal)
+        saldo -= amortizacao
+    
+    return max(saldo, Decimal('0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
     valor_efetivo = valor_dropdown * (1 + Decimal(str(agio)) / Decimal('100'))
-    return max(saldo - valor_efetivo, Decimal('0'))
+    return max(saldo_devedor - valor_efetivo, Decimal('0'))
 
-st.title("Simulador de Consórcio Constructa com Dropdowns")
+# Interface do usuário
+st.title("Constructa - Simulador de Consórcio com Dropdown")
 
+# Inputs
 col1, col2 = st.columns(2)
 with col1:
-    valor_credito = parse_currency(st.text_input("Valor do Crédito", value="R$ 2.536.401,20"))
-    valor_lance_pago = parse_currency(st.text_input("Valor do Lance Pago", value="R$ 655.236,98"))
-    valor_lance_embutido = parse_currency(st.text_input("Valor do Lance Embutido", value="R$ 655.236,98"))
+    valor_credito = parse_currency(st.text_input("Valor do Crédito", value="R$ 1.000.000,00"))
+    prazo_meses = st.number_input("Prazo (meses)", min_value=12, max_value=240, value=180)
+    taxa_admin_anual = st.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=1.20, step=0.01)
 with col2:
-    valor_parcela_apos_lance = parse_currency(st.text_input("Valor da Parcela Após Lance", value="R$ 8.819,52"))
-    prazo_apos_lance = int(parse_currency(st.text_input("Prazo Após Lance (meses)", value="208")))
+    indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1)
+    valor_lance = parse_currency(st.text_input("Valor do Lance", value="R$ 200.000,00"))
 
-# Cálculos iniciais
-valor_lance_total = valor_lance_pago + valor_lance_embutido
-credito_novo = valor_credito - valor_lance_total
-relacao_apos_lance = calcular_relacao_parcela_credito(valor_parcela_apos_lance, credito_novo)
-
-# Exibição das informações iniciais
-st.write(f"Crédito Novo: {format_currency(credito_novo)}")
-st.write(f"Relação Parcela/Dinheiro Novo Após Lance: {relacao_apos_lance}%")
-
-# Seção de Dropdowns
-st.subheader("Simulação de Dropdowns")
-if 'dropdowns' not in st.session_state:
-    st.session_state.dropdowns = []
-
-col1, col2, col3, col4 = st.columns(4)
+# Dropdown inputs
+st.subheader("Simulação de Dropdown")
+col1, col2, col3 = st.columns(3)
 with col1:
     valor_dropdown = parse_currency(st.text_input("Valor do Dropdown", value="R$ 100.000,00"))
 with col2:
     agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1)
 with col3:
-    mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, max_value=prazo_apos_lance, value=12)
-with col4:
-    if st.button("Adicionar Dropdown"):
-        st.session_state.dropdowns.append({"valor": valor_dropdown, "agio": agio, "mes": mes_dropdown})
-
-# Exibir dropdowns adicionados
-if st.session_state.dropdowns:
-    st.write("Dropdowns Adicionados:")
-    for i, dropdown in enumerate(st.session_state.dropdowns):
-        st.write(f"Dropdown {i+1}: {format_currency(dropdown['valor'])} no mês {dropdown['mes']} com ágio de {dropdown['agio']}%")
-        if st.button(f"Remover Dropdown {i+1}"):
-            st.session_state.dropdowns.pop(i)
-            st.experimental_rerun()
+    mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, value=60, step=1)
 
 if st.button("Simular"):
-    # Simulação com lance e dropdowns
-    saldos_com_lance = [credito_novo - (valor_parcela_apos_lance * i) for i in range(prazo_apos_lance + 1)]
+    # Cálculos
+    parcela_inicial = calcular_parcela(valor_credito - valor_lance, prazo_meses, taxa_admin_anual)
     
-    # Aplicar dropdowns
-    for dropdown in sorted(st.session_state.dropdowns, key=lambda x: x['mes']):
-        mes, valor, agio = dropdown['mes'], dropdown['valor'], dropdown['agio']
-        if mes < len(saldos_com_lance):
-            saldo_antes_dropdown = saldos_com_lance[mes]
-            saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
-            reducao = saldo_antes_dropdown - saldo_apos_dropdown
-            for i in range(mes, len(saldos_com_lance)):
-                saldos_com_lance[i] -= reducao
-
+    # Simulação sem dropdown (amortização padrão)
+    saldos_padrao = [calcular_saldo_devedor(valor_credito - valor_lance, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m) for m in range(prazo_meses + 1)]
+    
+    # Simulação com dropdown
+    saldos_com_dropdown = saldos_padrao.copy()
+    if mes_dropdown < prazo_meses:
+        saldo_antes_dropdown = calcular_saldo_devedor(valor_credito - valor_lance, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes_dropdown)
+        saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor_dropdown, agio)
+        for m in range(mes_dropdown, prazo_meses + 1):
+            saldos_com_dropdown[m] = calcular_saldo_devedor(saldo_apos_dropdown, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m - mes_dropdown)
+    
     # Visualização
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=list(range(prazo_apos_lance + 1)), y=[valor_credito] + saldos_com_lance, name='Saldo Devedor'))
+    fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_padrao, name='Amortização Padrão'))
+    fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_com_dropdown, name='Com Dropdown'))
+    fig.update_layout(
+        title="Evolução do Saldo Devedor",
+        xaxis_title="Meses",
+        yaxis_title="Saldo (R$)",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    st.plotly_chart(fig, use_container_width=True)
     
-    # Adicionar marcadores para os dropdowns
-    for dropdown in st.session_state.dropdowns:
-        mes, valor = dropdown['mes'], dropdown['valor']
-        if mes < len(saldos_com_lance):
-            fig.add_trace(go.Scatter(
-                x=[mes], 
-                y=[saldos_com_lance[mes]], 
-                mode='markers',
-                marker=dict(size=10, color='red'),
-                name=f'Dropdown de {format_currency(valor)}'
-            ))
-
-    fig.update_layout(title="Evolução do Saldo Devedor com Dropdowns", xaxis_title="Meses", yaxis_title="Saldo (R$)")
-    st.plotly_chart(fig)
+    # Métricas atualizadas
+    saldo_atual = saldos_com_dropdown[mes_dropdown]
+    parcela_atualizada = calcular_parcela(saldo_atual, prazo_meses - mes_dropdown, taxa_admin_anual)
     
-    # Métricas
-    novo_prazo = next((i for i, saldo in enumerate(saldos_com_lance) if saldo <= 0), prazo_apos_lance)
-    total_pago = valor_lance_pago + (valor_parcela_apos_lance * novo_prazo) + sum(d['valor'] for d in st.session_state.dropdowns)
-    economia_total = valor_credito - total_pago
-    st.metric("Economia Total Estimada", format_currency(economia_total))
-    st.metric("Redução no Prazo", f"{prazo_apos_lance - novo_prazo} meses")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Saldo Devedor Atual", format_currency(saldo_atual))
+        st.metric("Parcela Atualizada", format_currency(parcela_atualizada))
+    with col2:
+        st.metric("Parcela Original", format_currency(parcela_inicial))
+        st.metric("Redução na Parcela", format_currency(parcela_inicial - parcela_atualizada))
+    
+    # Cálculo da redução no prazo
+    prazo_reduzido = next((i for i, saldo in enumerate(saldos_com_dropdown) if saldo == 0), prazo_meses) - 1
+    st.metric("Redução Estimada no Prazo", f"{prazo_meses - prazo_reduzido} meses")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v1.6")
+    # Informações adicionais
+    st.subheader("Detalhes da Simulação")
+    st.write(f"Valor do Crédito: {format_currency(valor_credito)}")
+    st.write(f"Valor do Lance: {format_currency(valor_lance)}")
+    st.write(f"Crédito Efetivo: {format_currency(valor_credito - valor_lance)}")
+    st.write(f"Valor do Dropdown: {format_currency(valor_dropdown)}")
+    st.write(f"Valor Efetivo do Dropdown (com ágio): {format_currency(valor_dropdown * (1 + agio/100))}")
+
+st.sidebar.info("Constructa - Módulo de Consórcio v1.1")
