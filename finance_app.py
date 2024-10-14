@@ -70,19 +70,34 @@ def update_simulation():
     
     saldos_com_dropdowns = saldos_padrao.copy()
     saldo_atual = valor_credito - valor_lance
+    ultimo_mes_dropdown = 0
     for dropdown in st.session_state.dropdowns:
         mes = dropdown['mes']
         valor = parse_currency(dropdown['valor'])
         agio = Decimal(str(dropdown['agio']))
         
-        saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes)
+        saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes - ultimo_mes_dropdown)
         saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
         
         for m in range(mes, prazo_meses + 1):
             saldos_com_dropdowns[m] = calcular_saldo_devedor(saldo_apos_dropdown, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m - mes)
         
         saldo_atual = saldo_apos_dropdown
-    
+        ultimo_mes_dropdown = mes
+
+    # Calcular saldo e parcela no momento do último dropdown
+    if st.session_state.dropdowns:
+        ultimo_mes = st.session_state.dropdowns[-1]['mes']
+        st.session_state.saldo_padrao_ultimo_dropdown = saldos_padrao[ultimo_mes]
+        st.session_state.parcela_padrao = parcela_inicial
+        st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[ultimo_mes]
+        st.session_state.parcela_com_dropdown = calcular_parcela(saldos_com_dropdowns[ultimo_mes], prazo_meses - ultimo_mes, taxa_admin_anual, indice_correcao_anual)
+    else:
+        st.session_state.saldo_padrao_ultimo_dropdown = valor_credito - valor_lance
+        st.session_state.parcela_padrao = parcela_inicial
+        st.session_state.saldo_com_dropdown_ultimo = valor_credito - valor_lance
+        st.session_state.parcela_com_dropdown = parcela_inicial
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_padrao, name='Amortização Padrão'))
     fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_com_dropdowns, name='Com Dropdowns'))
@@ -108,10 +123,6 @@ def update_simulation():
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.session_state.fig = fig
-
-    st.session_state.saldo_final = saldos_com_dropdowns[-1]
-    st.session_state.parcela_inicial = parcela_inicial
-    st.session_state.reducao_prazo = prazo_meses - next((i for i, saldo in enumerate(saldos_com_dropdowns) if saldo == 0), prazo_meses)
 
 # Interface do usuário
 st.title("Constructa - Simulador de Consórcio com Múltiplos Dropdowns")
@@ -184,18 +195,25 @@ if st.session_state.dropdowns:
 if all(key in st.session_state for key in ['valor_credito', 'prazo_meses', 'taxa_admin_anual', 'indice_correcao_anual', 'valor_lance']):
     update_simulation()
 
+# Exibir métricas acima do gráfico
+if 'saldo_padrao_ultimo_dropdown' in st.session_state and 'parcela_padrao' in st.session_state:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Saldo Devedor (Amortização Padrão)", format_currency(st.session_state.saldo_padrao_ultimo_dropdown))
+    with col2:
+        st.metric("Parcela (Amortização Padrão)", format_currency(st.session_state.parcela_padrao))
+
 # Exibir gráfico
 if 'fig' in st.session_state:
     st.plotly_chart(st.session_state.fig, use_container_width=True)
 
-# Exibir métricas
-if all(key in st.session_state for key in ['saldo_final', 'parcela_inicial', 'reducao_prazo']):
+# Exibir métricas abaixo do gráfico
+if 'saldo_com_dropdown_ultimo' in st.session_state and 'parcela_com_dropdown' in st.session_state:
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Saldo Devedor Final", format_currency(st.session_state.saldo_final))
-        st.metric("Parcela Inicial", format_currency(st.session_state.parcela_inicial))
+        st.metric("Saldo Devedor (Com Dropdowns)", format_currency(st.session_state.saldo_com_dropdown_ultimo))
     with col2:
-        st.metric("Redução Estimada no Prazo", f"{st.session_state.reducao_prazo} meses")
+        st.metric("Parcela (Com Dropdowns)", format_currency(st.session_state.parcela_com_dropdown))
 
 # Informações adicionais
 st.subheader("Detalhes da Simulação")
@@ -203,4 +221,4 @@ st.write(f"Valor do Crédito: {st.session_state.valor_credito}")
 st.write(f"Valor do Lance: {st.session_state.valor_lance}")
 st.write(f"Crédito Efetivo: {format_currency(parse_currency(st.session_state.valor_credito) - parse_currency(st.session_state.valor_lance))}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v1.6")
+st.sidebar.info("Constructa - Módulo de Consórcio v1.7")
