@@ -1,6 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, ROUND_UP
 
 # Configuração da página
 st.set_page_config(page_title="Constructa - Módulo de Consórcio", layout="wide")
@@ -38,9 +38,8 @@ def calcular_parcela(valor_credito, prazo_meses):
     parcela = valor_credito / Decimal(str(prazo_meses))
     return parcela.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
-    valor_efetivo = valor_dropdown * (Decimal('1') + Decimal(str(agio)) / Decimal('100'))
-    return max(saldo_devedor - valor_efetivo, Decimal('0'))
+def aplicar_dropdown(saldo_devedor, valor_dropdown):
+    return max(saldo_devedor - valor_dropdown, Decimal('0'))
 
 # Função para atualizar o gráfico e métricas
 def update_simulation():
@@ -56,24 +55,29 @@ def update_simulation():
     saldos_padrao = [cl - (parcela_inicial * m) for m in range(prazo_meses + 1)]
     
     saldos_com_dropdowns = saldos_padrao.copy()
-    saldo_atual = cl
-    ultimo_mes_dropdown = 0
+    parcelas_restantes = prazo_meses
     
-    if st.session_state.dropdowns:
-        for dropdown in st.session_state.dropdowns:
-            mes = dropdown['mes']
-            valor = parse_currency(dropdown['valor'])
-            agio = Decimal(str(dropdown['agio']))
-            
-            saldo_antes_dropdown = cl - (parcela_inicial * mes)
-            saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
-            
-            for m in range(mes, prazo_meses + 1):
-                saldos_com_dropdowns[m] = saldo_apos_dropdown - (parcela_inicial * (m - mes))
-            
-            saldo_atual = saldo_apos_dropdown
-            ultimo_mes_dropdown = mes
-
+    for dropdown in st.session_state.dropdowns:
+        mes = dropdown['mes']
+        valor = parse_currency(dropdown['valor'])
+        
+        # Calcula o saldo antes do dropdown
+        saldo_antes_dropdown = saldos_com_dropdowns[mes]
+        
+        # Aplica o dropdown
+        saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor)
+        
+        # Recalcula o número de parcelas restantes
+        parcelas_restantes = max(1, (saldo_apos_dropdown / parcela_inicial).quantize(Decimal('1'), rounding=ROUND_UP))
+        
+        # Atualiza os saldos futuros
+        for m in range(mes, prazo_meses + 1):
+            parcelas_passadas = m - mes
+            if parcelas_passadas < parcelas_restantes:
+                saldos_com_dropdowns[m] = saldo_apos_dropdown - (parcela_inicial * parcelas_passadas)
+            else:
+                saldos_com_dropdowns[m] = Decimal('0')
+    
     st.session_state.saldos_com_dropdowns = saldos_com_dropdowns
     st.session_state.parcela_padrao = parcela_inicial
     st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[-1]
@@ -262,4 +266,8 @@ st.write(f"Lance Pago: {format_currency(st.session_state.lp)}")
 st.write(f"Lance Embutido: {format_currency(st.session_state.le)}")
 st.write(f"Crédito Liberado: {format_currency(st.session_state.cl)}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v2.3")
+# Cálculo do custo total dos dropdowns
+custo_total_dropdowns = sum(parse_currency(d['valor']) * (1 + d['agio']/100) for d in st.session_state.dropdowns)
+st.write(f"Custo Total dos Dropdowns (incluindo ágio): {format_currency(custo_total_dropdowns)}")
+
+st.sidebar.info("Constructa - Módulo de Consórcio v2.4")
