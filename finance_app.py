@@ -113,30 +113,30 @@ def main():
 
     if cenario == "Conservador":
         default_values = {
-            "valor_total": 5000000, "prazo_projeto": 48, "prazo_consorcio": 200,
-            "percentual_lance": 15, "taxa_admin": 1.5, "indice_correcao": 6,
-            "taxa_tradicional": 14, "perfil_receita": "Concentrado no Fim",
+            "valor_total": 5000000.0, "prazo_projeto": 48, "prazo_consorcio": 200,
+            "percentual_lance": 15.0, "taxa_admin": 1.5, "indice_correcao": 6.0,
+            "taxa_tradicional": 14.0, "perfil_receita": "Concentrado no Fim",
             "perfil_despesa": "Concentrado no Início"
         }
     elif cenario == "Moderado":
         default_values = {
-            "valor_total": 10000000, "prazo_projeto": 54, "prazo_consorcio": 220,
-            "percentual_lance": 20, "taxa_admin": 1.2, "indice_correcao": 5,
-            "taxa_tradicional": 12, "perfil_receita": "Uniforme",
+            "valor_total": 10000000.0, "prazo_projeto": 54, "prazo_consorcio": 220,
+            "percentual_lance": 20.0, "taxa_admin": 1.2, "indice_correcao": 5.0,
+            "taxa_tradicional": 12.0, "perfil_receita": "Uniforme",
             "perfil_despesa": "Uniforme"
         }
     elif cenario == "Otimista":
         default_values = {
-            "valor_total": 15000000, "prazo_projeto": 60, "prazo_consorcio": 240,
-            "percentual_lance": 25, "taxa_admin": 1.0, "indice_correcao": 4,
-            "taxa_tradicional": 10, "perfil_receita": "Crescente",
+            "valor_total": 15000000.0, "prazo_projeto": 60, "prazo_consorcio": 240,
+            "percentual_lance": 25.0, "taxa_admin": 1.0, "indice_correcao": 4.0,
+            "taxa_tradicional": 10.0, "perfil_receita": "Crescente",
             "perfil_despesa": "Decrescente"
         }
     else:
         default_values = {
-            "valor_total": 10000000, "prazo_projeto": 48, "prazo_consorcio": 220,
-            "percentual_lance": 20, "taxa_admin": 1.2, "indice_correcao": 5,
-            "taxa_tradicional": 12, "perfil_receita": "Uniforme",
+            "valor_total": 10000000.0, "prazo_projeto": 48, "prazo_consorcio": 220,
+            "percentual_lance": 20.0, "taxa_admin": 1.2, "indice_correcao": 5.0,
+            "taxa_tradicional": 12.0, "perfil_receita": "Uniforme",
             "perfil_despesa": "Uniforme"
         }
 
@@ -144,15 +144,15 @@ def main():
     valor_total = input_moeda("Valor Total do Projeto (R$)", value=default_values["valor_total"], key="valor_total")
     prazo_projeto = st.sidebar.slider("Prazo do Projeto (meses)", min_value=36, max_value=60, value=default_values["prazo_projeto"])
     prazo_consorcio = st.sidebar.slider("Prazo do Consórcio (meses)", min_value=180, max_value=240, value=default_values["prazo_consorcio"])
-    percentual_lance = st.sidebar.slider("Percentual de Lance (%)", min_value=0.0, max_value=50.0, value=default_values["percentual_lance"], step=0.1)
+    percentual_lance = st.sidebar.slider("Percentual de Lance (%)", min_value=0.0, max_value=50.0, value=float(default_values["percentual_lance"]), step=0.1)
 
     mostrar_avancado = st.sidebar.checkbox("Mostrar parâmetros avançados")
 
     if mostrar_avancado:
         st.sidebar.header("Parâmetros Avançados")
-        taxa_admin = st.sidebar.slider("Taxa de Administração Anual (%)", min_value=0.1, max_value=20.0, value=default_values["taxa_admin"], step=0.1)
-        indice_correcao = st.sidebar.slider("Índice de Correção Anual (%)", min_value=0.0, max_value=15.0, value=default_values["indice_correcao"], step=0.1)
-        taxa_tradicional = st.sidebar.slider("Taxa de Juros Tradicional (% a.a.)", min_value=1.0, max_value=20.0, value=default_values["taxa_tradicional"], step=0.1)
+        taxa_admin = st.sidebar.slider("Taxa de Administração Anual (%)", min_value=0.1, max_value=20.0, value=float(default_values["taxa_admin"]), step=0.1)
+        indice_correcao = st.sidebar.slider("Índice de Correção Anual (%)", min_value=0.0, max_value=15.0, value=float(default_values["indice_correcao"]), step=0.1)
+        taxa_tradicional = st.sidebar.slider("Taxa de Juros Tradicional (% a.a.)", min_value=1.0, max_value=20.0, value=float(default_values["taxa_tradicional"]), step=0.1)
     else:
         taxa_admin = default_values["taxa_admin"]
         indice_correcao = default_values["indice_correcao"]
