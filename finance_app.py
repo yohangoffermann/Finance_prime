@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 # Configuração da página
 st.set_page_config(page_title="Constructa - Módulo de Consórcio", layout="wide")
 
-# Funções auxiliares (mantidas as mesmas)
+# Funções auxiliares
 def format_currency(value):
     if isinstance(value, str):
         value = parse_currency(value)
@@ -72,6 +72,7 @@ def update_simulation():
     indice_correcao_anual = Decimal(str(st.session_state.indice_correcao_anual))
 
     ct, lp, le, cl = calcular_lance_embutido(dnd, plt)
+    st.session_state.ct, st.session_state.lp, st.session_state.le, st.session_state.cl = ct, lp, le, cl
     
     parcela_inicial = calcular_parcela(cl, prazo_meses, taxa_admin_anual, indice_correcao_anual)
     
@@ -161,16 +162,36 @@ with st.sidebar:
     if dinheiro_novo_desejado != st.session_state.dinheiro_novo_desejado:
         st.session_state.dinheiro_novo_desejado = format_input_currency(dinheiro_novo_desejado)
 
-    st.session_state.percentual_lance_total = st.slider("Percentual de Lance Total (%)", min_value=50.0, max_value=60.0, value=55.0, step=0.1, key="percentual_lance_total")
-    st.session_state.prazo_meses = st.number_input("Prazo (meses)", min_value=180, max_value=240, value=200, step=1, key="prazo_meses")
-    st.session_state.taxa_admin_anual = st.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=1.20, step=0.01, key="taxa_admin_anual")
-    st.session_state.indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1, key="indice_correcao_anual")
+    if 'percentual_lance_total' not in st.session_state:
+        st.session_state.percentual_lance_total = 55.0
+    percentual_lance_total = st.slider("Percentual de Lance Total (%)", min_value=50.0, max_value=60.0, value=st.session_state.percentual_lance_total, step=0.1, key="slider_percentual_lance_total")
+    if percentual_lance_total != st.session_state.percentual_lance_total:
+        st.session_state.percentual_lance_total = percentual_lance_total
 
-# Corpo principal
-if st.button("Calcular Padrão Lance Embutido"):
+    if 'prazo_meses' not in st.session_state:
+        st.session_state.prazo_meses = 200
+    prazo_meses = st.number_input("Prazo (meses)", min_value=180, max_value=240, value=st.session_state.prazo_meses, step=1, key="input_prazo_meses")
+    if prazo_meses != st.session_state.prazo_meses:
+        st.session_state.prazo_meses = prazo_meses
+
+    if 'taxa_admin_anual' not in st.session_state:
+        st.session_state.taxa_admin_anual = 1.20
+    taxa_admin_anual = st.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=st.session_state.taxa_admin_anual, step=0.01, key="input_taxa_admin_anual")
+    if taxa_admin_anual != st.session_state.taxa_admin_anual:
+        st.session_state.taxa_admin_anual = taxa_admin_anual
+
+    if 'indice_correcao_anual' not in st.session_state:
+        st.session_state.indice_correcao_anual = 5.0
+    indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=st.session_state.indice_correcao_anual, step=0.1, key="input_indice_correcao_anual")
+    if indice_correcao_anual != st.session_state.indice_correcao_anual:
+        st.session_state.indice_correcao_anual = indice_correcao_anual
+
+# Atualizar simulação em tempo real
+if all(key in st.session_state for key in ['dinheiro_novo_desejado', 'percentual_lance_total', 'prazo_meses', 'taxa_admin_anual', 'indice_correcao_anual']):
     update_simulation()
 
-    # Exibir resultados do Padrão Lance Embutido
+# Exibir resultados do Padrão Lance Embutido
+if 'ct' in st.session_state:
     st.subheader("Resultados do Padrão Lance Embutido")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -203,7 +224,7 @@ if st.button("Calcular Padrão Lance Embutido"):
         prazo_valido = st.session_state.prazo_meses >= 180
         st.write(f"Prazo ≥ 180 meses: {'' if prazo_valido else ''}")
 
-# Seção de Dropdowns (mantida como estava)
+# Seção de Dropdowns
 st.subheader("Simulação de Dropdowns")
 
 # Inicialização da lista de dropdowns
@@ -225,11 +246,12 @@ with col4:
             "agio": novo_agio,
             "mes": novo_mes_dropdown
         }
-    if not any(d['mes'] == novo_mes_dropdown for d in st.session_state.dropdowns):
+        if not any(d['mes'] == novo_mes_dropdown for d in st.session_state.dropdowns):
             st.session_state.dropdowns.append(novo_dropdown)
             st.session_state.dropdowns.sort(key=lambda x: x['mes'])
             st.success(f"Dropdown de {novo_dropdown['valor']} adicionado com sucesso.")
-    else:
+            update_simulation()
+        else:
             st.error(f"Já existe um dropdown no mês {novo_mes_dropdown}. Escolha outro mês.")
 
 # Exibir dropdowns adicionados
@@ -246,11 +268,8 @@ if st.session_state.dropdowns:
         with col4:
             if st.button(f"Remover {i+1}"):
                 st.session_state.dropdowns.pop(i)
+                update_simulation()
                 st.experimental_rerun()
-
-# Atualizar simulação em tempo real
-if 'ct' in st.session_state:
-    update_simulation()
 
 # Exibir gráfico
 if 'fig' in st.session_state:
