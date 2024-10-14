@@ -214,7 +214,7 @@ with st.sidebar:
     
     indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1, key="indice_correcao_anual")
     
-        valor_lance_str = st.text_input("Valor do Lance", value="R$ 2.000.000,00", key="valor_lance_str")
+    valor_lance_str = st.text_input("Valor do Lance", value="R$ 2.000.000,00", key="valor_lance_str")
     valor_lance_str = format_input_currency(valor_lance_str)
     st.session_state.valor_lance = convert_currency_to_float(valor_lance_str)
 
