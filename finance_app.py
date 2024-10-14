@@ -17,6 +17,19 @@ def parse_currency(value):
         return Decimal(str(value))
     return Decimal(value.replace('R$', '').replace('.', '').replace(',', '.').strip())
 
+def format_input_currency(value):
+    if value:
+        value = value.replace('R$', '').replace('.', '').replace(',', '')
+        try:
+            float_value = float(value) / 100
+            return f"R$ {float_value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        except ValueError:
+            return value
+    return "R$ 0,00"
+
+def convert_currency_to_float(value):
+    return float(value.replace('R$', '').replace('.', '').replace(',', '.'))
+
 # Funções de cálculo
 def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual):
     valor_credito = Decimal(str(valor_credito))
@@ -72,7 +85,7 @@ def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
 
 def calcular_tir(fluxo_caixa, precisao=0.0001):
     def vpn(taxa):
-        return sum(valor / (1 + taxa) ** i for i, valor in enumerate(fluxo_caixa))
+        return sum(float(valor) / (1 + taxa) ** i for i, valor in enumerate(fluxo_caixa))
     
     taxa_baixa, taxa_alta = -0.99, 0.99
     while taxa_alta - taxa_baixa > precisao:
@@ -175,9 +188,9 @@ def update_all():
 # Interface do usuário
 # Sidebar para inputs principais
 with st.sidebar:
-    valor_credito_str = st.text_input("Valor do Crédito", value="10000000", key="valor_credito_str")
-    valor_credito = parse_currency(valor_credito_str)
-    st.session_state.valor_credito = float(valor_credito)
+    valor_credito_str = st.text_input("Valor do Crédito", value="R$ 10.000.000,00", key="valor_credito_str")
+    valor_credito_str = format_input_currency(valor_credito_str)
+    st.session_state.valor_credito = convert_currency_to_float(valor_credito_str)
 
     prazo_meses = st.number_input("Prazo do Consórcio (meses)", min_value=12, max_value=240, value=60, step=12, key="prazo_meses")
     
@@ -185,17 +198,17 @@ with st.sidebar:
     
     indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1, key="indice_correcao_anual")
     
-    valor_lance_str = st.text_input("Valor do Lance", value="2000000", key="valor_lance_str")
-    valor_lance = parse_currency(valor_lance_str)
-    st.session_state.valor_lance = float(valor_lance)
+    valor_lance_str = st.text_input("Valor do Lance", value="R$ 2.000.000,00", key="valor_lance_str")
+    valor_lance_str = format_input_currency(valor_lance_str)
+    st.session_state.valor_lance = convert_currency_to_float(valor_lance_str)
 
-    vgv_str = st.text_input("VGV", value="10000000", key="vgv_str")
-    vgv = parse_currency(vgv_str)
-    st.session_state.vgv = float(vgv)
+    vgv_str = st.text_input("VGV", value="R$ 10.000.000,00", key="vgv_str")
+    vgv_str = format_input_currency(vgv_str)
+    st.session_state.vgv = convert_currency_to_float(vgv_str)
 
-    orcamento_str = st.text_input("Orçamento", value="8000000", key="orcamento_str")
-    orcamento = parse_currency(orcamento_str)
-    st.session_state.orcamento = float(orcamento)
+    orcamento_str = st.text_input("Orçamento", value="R$ 8.000.000,00", key="orcamento_str")
+    orcamento_str = format_input_currency(orcamento_str)
+    st.session_state.orcamento = convert_currency_to_float(orcamento_str)
 
     taxa_desconto_vpl = st.number_input("Taxa de Desconto para VPL (%)", min_value=0.0, value=10.0, step=0.1, key="taxa_desconto_vpl")
 
@@ -247,8 +260,9 @@ relacao_metric = col2.empty()
 st.subheader("Simulação de Dropdown")
 col1, col2, col3 = st.columns(3)
 with col1:
-    valor_dropdown_str = st.text_input("Valor do Dropdown", value="500000", key="valor_dropdown_str")
-    valor_dropdown = parse_currency(valor_dropdown_str)
+    valor_dropdown_str = st.text_input("Valor do Dropdown", value="R$ 500.000,00", key="valor_dropdown_str")
+    valor_dropdown_str = format_input_currency(valor_dropdown_str)
+    valor_dropdown = convert_currency_to_float(valor_dropdown_str)
 with col2:
     agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1, key="agio")
 with col3:
@@ -258,7 +272,7 @@ if st.button("Adicionar Dropdown"):
     if 'dropdowns' not in st.session_state:
         st.session_state.dropdowns = []
     st.session_state.dropdowns.append({
-        "valor": float(valor_dropdown),
+        "valor": valor_dropdown,
         "agio": agio,
         "mes": mes_dropdown
     })
@@ -299,3 +313,4 @@ if all(key in st.session_state for key in ['valor_credito', 'prazo_meses', 'taxa
     update_all()
 
 st.sidebar.info("Constructa MVP - Versão 1.3.0")
+    
