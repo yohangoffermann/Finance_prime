@@ -2,17 +2,13 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import locale
-
-# Configurar a localização para formatação de números
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 def formatar_moeda(valor):
-    return locale.currency(valor, grouping=True, symbol=None)
+    return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 def parse_moeda(valor_str):
     try:
-        return locale.atof(valor_str.replace('R$', '').strip())
+        return float(valor_str.replace('R$', '').replace('.', '').replace(',', '.').strip())
     except ValueError:
         return 0.0
 
@@ -32,12 +28,10 @@ def calcular_parcela_consorcio(valor_total, prazo, taxa_admin_anual, percentual_
     return parcela
 
 def calcular_economia(valor_total, taxa_tradicional_anual, taxa_admin_anual, prazo, percentual_lance):
-    # Cálculo do custo total do financiamento tradicional
     taxa_tradicional_mensal = (1 + taxa_tradicional_anual/100)**(1/12) - 1
     parcela_tradicional = valor_total * (taxa_tradicional_mensal * (1 + taxa_tradicional_mensal)**prazo) / ((1 + taxa_tradicional_mensal)**prazo - 1)
     custo_total_tradicional = parcela_tradicional * prazo
 
-    # Cálculo do custo total do Constructa
     parcela_constructa = calcular_parcela_consorcio(valor_total, prazo, taxa_admin_anual, percentual_lance)
     custo_total_constructa = (parcela_constructa * prazo) + (valor_total * (percentual_lance / 100))
 
@@ -72,7 +66,6 @@ def main():
     st.set_page_config(page_title="Constructa - Simulador de Crédito Otimizado", layout="wide")
     st.title("Constructa - Simulador de Crédito Otimizado")
 
-    # Inputs na sidebar
     st.sidebar.header("Parâmetros do Projeto")
     valor_total = input_moeda("Valor Total do Projeto (R$)", value=1000000.0, key="valor_total")
     prazo = st.sidebar.slider("Prazo do Projeto (meses)", min_value=12, max_value=240, value=60)
@@ -85,21 +78,17 @@ def main():
     percentual_dropdown = st.sidebar.slider("Percentual do Dropdown (%)", min_value=0.0, max_value=50.0, value=30.0, step=0.1)
 
     if st.sidebar.button("Calcular"):
-        # Verificações
         if percentual_lance >= 100:
             st.error("O percentual de lance não pode ser 100% ou maior.")
             return
 
-        # Cálculos
         parcela = calcular_parcela_consorcio(valor_total, prazo, taxa_admin, percentual_lance)
         economia = calcular_economia(valor_total, taxa_tradicional, taxa_admin, prazo, percentual_lance)
         fluxo_caixa = simular_fluxo_caixa(valor_total, prazo, taxa_admin, percentual_lance, mes_dropdown, percentual_dropdown)
 
-        # Cálculos adicionais
         valor_lance = valor_total * (percentual_lance / 100)
         credito_efetivo = valor_total - valor_lance
 
-        # Exibição dos resultados
         col1, col2 = st.columns(2)
         
         with col1:
@@ -118,12 +107,11 @@ def main():
         st.header("Detalhamento do Fluxo de Caixa")
         df = pd.DataFrame({
             'Mês': range(len(fluxo_caixa)),
-            'Fluxo de Caixa': fluxo_caixa
+            'Fluxo de Caixa': [formatar_moeda(valor) for valor in fluxo_caixa]
         })
         st.dataframe(df)
 
-        # Aviso sobre parcela alta
-        if parcela > (valor_total * 0.03):  # 3% do valor total como exemplo
+        if parcela > (valor_total * 0.03):
             st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
 
 if __name__ == "__main__":
