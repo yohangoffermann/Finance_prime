@@ -10,7 +10,7 @@ def format_currency(value):
     if isinstance(value, str):
         value = parse_currency(value)
     return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-
+    
 def parse_currency(value):
     if isinstance(value, (int, float, Decimal)):
         return Decimal(str(value))
@@ -198,23 +198,43 @@ if all(key in st.session_state for key in ['dinheiro_novo_desejado', 'percentual
 # Exibir resultados do Padrão Lance Embutido
 if 'ct' in st.session_state:
     st.subheader("Resultados do Padrão Lance Embutido")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
     with col1:
         st.metric("Crédito Total", format_currency(st.session_state.ct))
-    with col2:
         st.metric("Lance Pago", format_currency(st.session_state.lp))
-    with col3:
+    with col2:
         st.metric("Lance Embutido", format_currency(st.session_state.le))
-    with col4:
         st.metric("Crédito Liberado", format_currency(st.session_state.cl))
+
+    st.markdown("---")
 
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Parcela Mensal Inicial", format_currency(st.session_state.parcela_padrao))
     with col2:
-        st.metric("Relação Parcela/Crédito Liberado", f"{(st.session_state.parcela_padrao / st.session_state.cl * 100):.2f}%")
+        relacao_parcela_cl = (st.session_state.parcela_padrao / st.session_state.cl * 100).quantize(Decimal('0.01'))
+        st.metric("Relação Parcela/Crédito Liberado", f"{relacao_parcela_cl}%")
     with col3:
-        st.metric("Eficiência do Modelo", f"{st.session_state.eficiencia_modelo:.2f}")
+        eficiencia = st.session_state.eficiencia_modelo.quantize(Decimal('0.01'))
+        st.metric("Eficiência do Modelo", f"{eficiencia}")
+
+    st.markdown("---")
+
+    # Validações
+    st.subheader("Validações do Modelo")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        parcela_padrao = Decimal(str(st.session_state.parcela_padrao))
+        cl = Decimal(str(st.session_state.cl))
+        parcela_vs_cl = parcela_padrao <= Decimal('0.005') * cl
+        st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
+    with col2:
+        dnd = parse_currency(st.session_state.dinheiro_novo_desejado)
+        parcela_vs_dn = parcela_padrao <= Decimal('0.01') * dnd
+        st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
+    with col3:
+        prazo_valido = st.session_state.prazo_meses >= 180
+        st.write(f"Prazo ≥ 180 meses: {'' if prazo_valido else ''}")
 
 # Validações
     st.subheader("Validações do Modelo")
