@@ -223,7 +223,7 @@ if 'ct' in st.session_state:
         parcela_vs_cl = st.session_state.parcela_padrao <= 0.005 * st.session_state.cl
         st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
     with col2:        parcela_vs_dn = st.session_state.parcela_padrao <= 0.01 * parse_currency(st.session_state.dinheiro_novo_desejado)
-            st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
+        st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
     with col3:
         prazo_valido = st.session_state.prazo_meses >= 180
         st.write(f"Prazo ≥ 180 meses: {'' if prazo_valido else ''}")
