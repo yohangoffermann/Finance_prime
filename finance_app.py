@@ -189,7 +189,7 @@ def main():
             st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
 
     st.sidebar.info("Constructa - Versão Piloto")
-        st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
+    st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
 
     st.sidebar.info("Constructa - Versão Piloto")
     st.sidebar.warning("Este é um modelo simplificado para fins de demonstração. Consulte um profissional financeiro para decisões reais.")
