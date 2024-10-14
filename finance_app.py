@@ -66,12 +66,12 @@ def update_simulation():
     
     saldos_com_dropdowns = saldos_padrao.copy()
     saldo_atual = valor_credito - valor_lance
-    for dropdown in sorted(st.session_state.dropdowns, key=lambda x: x['mes']):
+    for dropdown in st.session_state.dropdowns:
         mes = dropdown['mes']
         valor = parse_currency(dropdown['valor'])
         agio = Decimal(str(dropdown['agio']))
         
-        saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes - len(st.session_state.dropdowns) + 1)
+        saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes)
         saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
         
         for m in range(mes, prazo_meses + 1):
@@ -87,7 +87,7 @@ def update_simulation():
         fig.add_annotation(
             x=dropdown['mes'],
             y=saldos_com_dropdowns[dropdown['mes']],
-            text=f"Dropdown: {format_currency(parse_currency(dropdown['valor']))}",
+            text=f"Dropdown: {dropdown['valor']}",
             showarrow=True,
             arrowhead=2,
             arrowsize=1,
@@ -149,12 +149,16 @@ with col3:
     novo_mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, value=60, step=1, key="novo_mes_dropdown")
 with col4:
     if st.button("Adicionar Dropdown"):
-        st.session_state.dropdowns.append({
+        novo_dropdown = {
             "valor": format_input_currency(novo_valor_dropdown),
             "agio": novo_agio,
             "mes": novo_mes_dropdown
-        })
-        st.experimental_rerun()
+        }
+        if not any(d['mes'] == novo_mes_dropdown for d in st.session_state.dropdowns):
+            st.session_state.dropdowns.append(novo_dropdown)
+            st.session_state.dropdowns.sort(key=lambda x: x['mes'])
+        else:
+            st.error(f"Já existe um dropdown no mês {novo_mes_dropdown}. Escolha outro mês.")
 
 # Exibir dropdowns adicionados
 if st.session_state.dropdowns:
@@ -195,4 +199,4 @@ st.write(f"Valor do Crédito: {st.session_state.valor_credito}")
 st.write(f"Valor do Lance: {st.session_state.valor_lance}")
 st.write(f"Crédito Efetivo: {format_currency(parse_currency(st.session_state.valor_credito) - parse_currency(st.session_state.valor_lance))}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v1.4")
+st.sidebar.info("Constructa - Módulo de Consórcio v1.5")
