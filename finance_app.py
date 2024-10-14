@@ -220,10 +220,13 @@ if 'ct' in st.session_state:
     st.subheader("Validações do Modelo")
     col1, col2, col3 = st.columns(3)
     with col1:
-        parcela_vs_cl = st.session_state.parcela_padrao <= 0.005 * st.session_state.cl
+        parcela_padrao = Decimal(str(st.session_state.parcela_padrao))
+        cl = Decimal(str(st.session_state.cl))
+        parcela_vs_cl = parcela_padrao <= Decimal('0.005') * cl
         st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
     with col2:
-        parcela_vs_dn = st.session_state.parcela_padrao <= 0.01 * parse_currency(st.session_state.dinheiro_novo_desejado)
+        dnd = parse_currency(st.session_state.dinheiro_novo_desejado)
+        parcela_vs_dn = parcela_padrao <= Decimal('0.01') * dnd
         st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
     with col3:
         prazo_valido = st.session_state.prazo_meses >= 180
