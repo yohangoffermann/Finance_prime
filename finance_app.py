@@ -47,17 +47,16 @@ def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
 # Interface do usuário
 st.title("Constructa - Simulador de Consórcio com Dropdown")
 
-# Inputs
-col1, col2 = st.columns(2)
-with col1:
+# Sidebar para inputs base
+with st.sidebar:
+    st.header("Parâmetros do Consórcio")
     valor_credito = parse_currency(st.text_input("Valor do Crédito", value="R$ 1.000.000,00"))
     prazo_meses = st.number_input("Prazo (meses)", min_value=12, max_value=240, value=180)
     taxa_admin_anual = st.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=1.20, step=0.01)
-with col2:
     indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1)
     valor_lance = parse_currency(st.text_input("Valor do Lance", value="R$ 200.000,00"))
 
-# Dropdown inputs
+# Corpo principal para inputs operacionais
 st.subheader("Simulação de Dropdown")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -124,4 +123,4 @@ if st.button("Simular"):
     st.write(f"Valor do Dropdown: {format_currency(valor_dropdown)}")
     st.write(f"Valor Efetivo do Dropdown (com ágio): {format_currency(valor_dropdown * (1 + agio/100))}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v1.1")
+st.sidebar.info("Constructa - Módulo de Consórcio v1.2")
