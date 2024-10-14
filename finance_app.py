@@ -1,5 +1,4 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -46,17 +45,18 @@ def simular_fluxo_caixa(valor_total, prazo_projeto, prazo_consorcio, taxa_admin,
 
     return fluxo_caixa
 
+def calcular_vpn(taxa, fluxos):
+    return sum(fluxo / (1 + taxa) ** i for i, fluxo in enumerate(fluxos))
+
 def calcular_economia(valor_total, taxa_tradicional, prazo_projeto, fluxo_caixa_constructa):
     taxa_mensal = (1 + taxa_tradicional/100)**(1/12) - 1
     parcela_tradicional = valor_total * (taxa_mensal * (1 + taxa_mensal)**prazo_projeto) / ((1 + taxa_mensal)**prazo_projeto - 1)
     fluxo_tradicional = [-parcela_tradicional] * prazo_projeto
     
-    vpls = []
-    for fluxo in [fluxo_caixa_constructa, fluxo_tradicional]:
-        vpl = np.npv(taxa_mensal, fluxo)
-        vpls.append(vpl)
+    vpn_constructa = calcular_vpn(taxa_mensal, fluxo_caixa_constructa)
+    vpn_tradicional = calcular_vpn(taxa_mensal, fluxo_tradicional)
     
-    return vpls[1] - vpls[0]  # Economia é a diferença entre os VPLs
+    return vpn_tradicional - vpn_constructa  # Economia é a diferença entre os VPNs
 
 def identificar_oportunidades_dropdown(fluxo_caixa, excedente, prazo_projeto, prazo_consorcio, valor_total, percentual_lance):
     oportunidades = []
@@ -93,17 +93,29 @@ def plot_fluxos_com_oportunidades(fluxo_caixa, excedente, oportunidades):
     fig.tight_layout()
     return fig
 
+def linspace(start, stop, num):
+    step = (stop - start) / (num - 1)
+    return [start + i * step for i in range(num)]
+
 def gerar_perfil(perfil, valor_total, prazo):
     if perfil == "Uniforme":
         return [valor_total / prazo] * prazo
     elif perfil == "Crescente":
-        return np.linspace(valor_total / (prazo * 1.5), valor_total * 1.5 / prazo, prazo).tolist()
+        return linspace(valor_total / (prazo * 1.5), valor_total * 1.5 / prazo, prazo)
     elif perfil == "Concentrado no Fim":
         return [valor_total / (prazo * 2)] * (prazo // 2) + [valor_total * 1.5 / (prazo // 2)] * (prazo - prazo // 2)
     elif perfil == "Concentrado no Início":
         return [valor_total * 1.5 / (prazo // 2)] * (prazo // 2) + [valor_total / (prazo * 2)] * (prazo - prazo // 2)
     elif perfil == "Decrescente":
-        return np.linspace(valor_total * 1.5 / prazo, valor_total / (prazo * 1.5), prazo).tolist()
+        return linspace(valor_total * 1.5 / prazo, valor_total / (prazo * 1.5), prazo)
+
+def cumsum(lst):
+    total = 0
+    result = []
+    for value in lst:
+        total += value
+        result.append(total)
+    return result
 
 def main():
     st.set_page_config(page_title="Constructa - Simulador de Crédito Otimizado", layout="wide")
@@ -170,7 +182,7 @@ def main():
             return
 
         fluxo_caixa = simular_fluxo_caixa(valor_total, prazo_projeto, prazo_consorcio, taxa_admin, percentual_lance, indice_correcao, receitas, despesas, [])
-        excedente = np.cumsum(fluxo_caixa)
+        excedente = cumsum(fluxo_caixa)
         economia = calcular_economia(valor_total, taxa_tradicional, prazo_projeto, fluxo_caixa)
 
         oportunidades_dropdown = identificar_oportunidades_dropdown(fluxo_caixa, excedente, prazo_projeto, prazo_consorcio, valor_total, percentual_lance)
@@ -201,23 +213,4 @@ def main():
             oportunidades_df["Benefício Estimado"] = oportunidades_df["Benefício Estimado"].apply(formatar_moeda)
             st.table(oportunidades_df)
         else:
-            st.write("Não foram identificadas oportunidades significativas de dropdown.")
-
-        st.header("Detalhamento do Fluxo de Caixa e Excedente")
-        df = pd.DataFrame({
-            'Mês': range(1, len(fluxo_caixa) + 1),
-            'Receitas': receitas + [0] * (len(fluxo_caixa) - len(receitas)),
-            'Despesas': despesas + [0] * (len(fluxo_caixa) - len(despesas)),
-            'Fluxo de Caixa': [formatar_moeda(valor) for valor in fluxo_caixa],
-            'Excedente Acumulado': [formatar_moeda(valor) for valor in excedente]
-        })
-        st.dataframe(df)
-
-        if parcela_inicial > (valor_total * 0.03):
-            st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
-
-    st.sidebar.info("Constructa - Versão Piloto")
-    st.sidebar.warning("Este é um modelo simplificado para fins de demonstração. Consulte um profissional financeiro para decisões reais.")
-
-if __name__ == "__main__":
-    main()
+            st.write("Não foram identificadas oportunidades
