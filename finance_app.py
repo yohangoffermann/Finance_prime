@@ -229,7 +229,7 @@ with col4:
             st.session_state.dropdowns.append(novo_dropdown)
             st.session_state.dropdowns.sort(key=lambda x: x['mes'])
             st.success(f"Dropdown de {novo_dropdown['valor']} adicionado com sucesso.")
-        else:
+    else:
             st.error(f"Já existe um dropdown no mês {novo_mes_dropdown}. Escolha outro mês.")
 
 # Exibir dropdowns adicionados
