@@ -23,14 +23,17 @@ def format_input_currency(value):
     return "R$ 0,00"
 
 # Funções de cálculo
-def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual):
+def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual):
     valor_credito = Decimal(str(valor_credito))
     prazo_meses = Decimal(str(prazo_meses))
     taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
+    indice_correcao_mensal = (Decimal('1') + Decimal(str(indice_correcao_anual)) / Decimal('100')) ** (Decimal('1') / Decimal('12')) - Decimal('1')
     
-    parcela_fundo = valor_credito / prazo_meses
-    parcela_admin = valor_credito * taxa_admin_mensal
-    return (parcela_fundo + parcela_admin).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    taxa_efetiva = taxa_admin_mensal + indice_correcao_mensal
+    fator = (Decimal('1') - (Decimal('1') + taxa_efetiva) ** (-prazo_meses)) / taxa_efetiva
+    
+    parcela = valor_credito / fator
+    return parcela.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, meses_pagos):
     valor_credito = Decimal(str(valor_credito))
@@ -43,7 +46,8 @@ def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_corr
         if mes % 12 == 1 and mes > 12:  # Aplica correção no início de cada ano, a partir do segundo ano
             saldo *= (Decimal('1') + indice_correcao_anual)
         
-        amortizacao = parcela - (saldo * taxa_admin_mensal)
+        juros_admin = saldo * taxa_admin_mensal
+        amortizacao = parcela - juros_admin
         saldo -= amortizacao
     
     return max(saldo, Decimal('0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -60,7 +64,7 @@ def update_simulation():
     taxa_admin_anual = Decimal(str(st.session_state.taxa_admin_anual))
     indice_correcao_anual = Decimal(str(st.session_state.indice_correcao_anual))
 
-    parcela_inicial = calcular_parcela(valor_credito - valor_lance, prazo_meses, taxa_admin_anual)
+    parcela_inicial = calcular_parcela(valor_credito - valor_lance, prazo_meses, taxa_admin_anual, indice_correcao_anual)
     
     saldos_padrao = [calcular_saldo_devedor(valor_credito - valor_lance, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m) for m in range(prazo_meses + 1)]
     
@@ -199,4 +203,4 @@ st.write(f"Valor do Crédito: {st.session_state.valor_credito}")
 st.write(f"Valor do Lance: {st.session_state.valor_lance}")
 st.write(f"Crédito Efetivo: {format_currency(parse_currency(st.session_state.valor_credito) - parse_currency(st.session_state.valor_lance))}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v1.5")
+st.sidebar.info("Constructa - Módulo de Consórcio v1.6")
