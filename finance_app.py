@@ -58,7 +58,22 @@ def calcular_economia(valor_total, taxa_tradicional, prazo_projeto, fluxo_caixa_
     
     return vpls[1] - vpls[0]  # Economia é a diferença entre os VPLs
 
-def plot_fluxos(fluxo_caixa, excedente, dropdowns):
+def identificar_oportunidades_dropdown(fluxo_caixa, excedente, prazo_projeto, prazo_consorcio, valor_total, percentual_lance):
+    oportunidades = []
+    saldo_devedor = valor_total * (1 - percentual_lance / 100)
+    agio = 0.25  # 25% de ágio
+
+    for mes in range(prazo_projeto):
+        if mes > 0 and excedente[mes] > excedente[mes-1] and excedente[mes] > 0:
+            valor_disponivel = min(excedente[mes], saldo_devedor * 0.1)  # Limita o dropdown a 10% do saldo devedor
+            if valor_disponivel > valor_total * 0.05:  # Só considera dropdowns significativos (> 5% do valor total)
+                beneficio = valor_disponivel * agio
+                oportunidades.append((mes, valor_disponivel, beneficio))
+                saldo_devedor -= valor_disponivel
+
+    return oportunidades
+
+def plot_fluxos_com_oportunidades(fluxo_caixa, excedente, oportunidades):
     fig, ax1 = plt.subplots(figsize=(12, 6))
     
     ax1.plot(range(len(fluxo_caixa)), fluxo_caixa, marker='o', color='b', label='Fluxo de Caixa')
@@ -71,90 +86,94 @@ def plot_fluxos(fluxo_caixa, excedente, dropdowns):
     ax2.set_ylabel("Excedente Acumulado (R$)", color='r')
     ax2.tick_params(axis='y', labelcolor='r')
 
-    for mes, valor in dropdowns:
+    for mes, valor, _ in oportunidades:
         ax1.axvline(x=mes, color='g', linestyle='--', alpha=0.5)
         ax1.text(mes, ax1.get_ylim()[1], f'Dropdown R${valor:,.0f}', rotation=90, verticalalignment='top')
 
     fig.tight_layout()
     return fig
 
+def gerar_perfil(perfil, valor_total, prazo):
+    if perfil == "Uniforme":
+        return [valor_total / prazo] * prazo
+    elif perfil == "Crescente":
+        return np.linspace(valor_total / (prazo * 1.5), valor_total * 1.5 / prazo, prazo).tolist()
+    elif perfil == "Concentrado no Fim":
+        return [valor_total / (prazo * 2)] * (prazo // 2) + [valor_total * 1.5 / (prazo // 2)] * (prazo - prazo // 2)
+    elif perfil == "Concentrado no Início":
+        return [valor_total * 1.5 / (prazo // 2)] * (prazo // 2) + [valor_total / (prazo * 2)] * (prazo - prazo // 2)
+    elif perfil == "Decrescente":
+        return np.linspace(valor_total * 1.5 / prazo, valor_total / (prazo * 1.5), prazo).tolist()
+
 def main():
     st.set_page_config(page_title="Constructa - Simulador de Crédito Otimizado", layout="wide")
     st.title("Constructa - Simulador de Crédito Otimizado")
 
-    st.sidebar.header("Parâmetros do Projeto")
-    valor_total = input_moeda("Valor Total do Projeto (R$)", value=1000000.0, key="valor_total")
-    prazo_projeto = st.sidebar.slider("Prazo do Projeto (meses)", min_value=12, max_value=240, value=60)
-    prazo_consorcio = st.sidebar.slider("Prazo do Consórcio (meses)", min_value=12, max_value=240, value=60)
-    percentual_lance = st.sidebar.slider("Percentual de Lance (%)", min_value=0.0, max_value=50.0, value=20.0, step=0.1)
-    taxa_admin = st.sidebar.slider("Taxa de Administração Anual (%)", min_value=0.1, max_value=20.0, value=1.2, step=0.1)
-    indice_correcao = st.sidebar.slider("Índice de Correção Anual (%)", min_value=0.0, max_value=15.0, value=5.0, step=0.1)
-    taxa_tradicional = st.sidebar.slider("Taxa de Juros Tradicional (% a.a.)", min_value=1.0, max_value=20.0, value=12.0, step=0.1)
+    cenario = st.sidebar.selectbox("Escolha um cenário base", ["Personalizado", "Conservador", "Moderado", "Otimista"])
 
-    st.sidebar.header("Perfil de Receitas do Projeto")
-    perfil_receita = st.sidebar.selectbox("Escolha o perfil de receitas", ["Constante", "Crescente", "Concentrado no Fim", "Personalizado"])
-    if perfil_receita == "Constante":
-        receita_mensal = st.sidebar.number_input("Receita Mensal Estimada (R$)", min_value=0.0, value=50000.0, step=1000.0)
-        receitas = [receita_mensal] * prazo_projeto
-    elif perfil_receita == "Crescente":
-        receita_inicial = st.sidebar.number_input("Receita Inicial Mensal (R$)", min_value=0.0, value=30000.0, step=1000.0)
-        receita_final = st.sidebar.number_input("Receita Final Mensal (R$)", min_value=receita_inicial, value=70000.0, step=1000.0)
-        receitas = np.linspace(receita_inicial, receita_final, prazo_projeto).tolist()
-    elif perfil_receita == "Concentrado no Fim":
-        receita_total = st.sidebar.number_input("Receita Total do Projeto (R$)", min_value=0.0, value=valor_total*1.3, step=100000.0)
-        meses_finais = st.sidebar.slider("Meses de Concentração das Receitas", min_value=1, max_value=prazo_projeto//2, value=prazo_projeto//4)
-        receitas = [0] * (prazo_projeto - meses_finais) + [receita_total / meses_finais] * meses_finais
-    else:  # Personalizado
-        st.sidebar.write("Insira as receitas para cada trimestre do projeto:")
-        receitas_trimestrais = []
-        for i in range(prazo_projeto // 3 + (1 if prazo_projeto % 3 else 0)):
-            receita = st.sidebar.number_input(f"Receita Trimestral {i+1} (R$)", min_value=0.0, value=150000.0, step=10000.0, key=f"receita_trim_{i}")
-            receitas_trimestrais.append(receita)
-        receitas = []
-        for r in receitas_trimestrais:
-            receitas.extend([r/3] * 3)
-        receitas = receitas[:prazo_projeto]
+    if cenario == "Conservador":
+        default_values = {
+            "valor_total": 5000000, "prazo_projeto": 48, "prazo_consorcio": 200,
+            "percentual_lance": 15, "taxa_admin": 1.5, "indice_correcao": 6,
+            "taxa_tradicional": 14, "perfil_receita": "Concentrado no Fim",
+            "perfil_despesa": "Concentrado no Início"
+        }
+    elif cenario == "Moderado":
+        default_values = {
+            "valor_total": 10000000, "prazo_projeto": 54, "prazo_consorcio": 220,
+            "percentual_lance": 20, "taxa_admin": 1.2, "indice_correcao": 5,
+            "taxa_tradicional": 12, "perfil_receita": "Uniforme",
+            "perfil_despesa": "Uniforme"
+        }
+    elif cenario == "Otimista":
+        default_values = {
+            "valor_total": 15000000, "prazo_projeto": 60, "prazo_consorcio": 240,
+            "percentual_lance": 25, "taxa_admin": 1.0, "indice_correcao": 4,
+            "taxa_tradicional": 10, "perfil_receita": "Crescente",
+            "perfil_despesa": "Decrescente"
+        }
+    else:
+        default_values = {
+            "valor_total": 10000000, "prazo_projeto": 48, "prazo_consorcio": 220,
+            "percentual_lance": 20, "taxa_admin": 1.2, "indice_correcao": 5,
+            "taxa_tradicional": 12, "perfil_receita": "Uniforme",
+            "perfil_despesa": "Uniforme"
+        }
 
-    st.sidebar.header("Perfil de Despesas do Projeto")
-    perfil_despesa = st.sidebar.selectbox("Escolha o perfil de despesas", ["Constante", "Variável por Fase", "Personalizado"])
-    if perfil_despesa == "Constante":
-        despesa_mensal = st.sidebar.number_input("Despesa Mensal Estimada (R$)", min_value=0.0, value=30000.0, step=1000.0)
-        despesas = [despesa_mensal] * prazo_projeto
-    elif perfil_despesa == "Variável por Fase":
-        st.sidebar.write("Insira as despesas para cada fase do projeto:")
-        despesa_inicial = st.sidebar.number_input("Despesa Mensal Inicial (R$)", min_value=0.0, value=20000.0, step=1000.0)
-        despesa_construcao = st.sidebar.number_input("Despesa Mensal Durante Construção (R$)", min_value=0.0, value=50000.0, step=1000.0)
-        despesa_final = st.sidebar.number_input("Despesa Mensal Final (R$)", min_value=0.0, value=10000.0, step=1000.0)
-        meses_construcao = st.sidebar.slider("Meses de Construção", min_value=1, max_value=prazo_projeto-2, value=prazo_projeto-6)
-        despesas = [despesa_inicial] * 3 + [despesa_construcao] * meses_construcao + [despesa_final] * (prazo_projeto - meses_construcao - 3)
-    else:  # Personalizado
-        st.sidebar.write("Insira as despesas para cada trimestre do projeto:")
-        despesas_trimestrais = []
-        for i in range(prazo_projeto // 3 + (1 if prazo_projeto % 3 else 0)):
-            despesa = st.sidebar.number_input(f"Despesa Trimestral {i+1} (R$)", min_value=0.0, value=100000.0, step=10000.0, key=f"despesa_trim_{i}")
-            despesas_trimestrais.append(despesa)
-        despesas = []
-        for d in despesas_trimestrais:
-            despesas.extend([d/3] * 3)
-        despesas = despesas[:prazo_projeto]
+    st.sidebar.header("Parâmetros Essenciais")
+    valor_total = input_moeda("Valor Total do Projeto (R$)", value=default_values["valor_total"], key="valor_total")
+    prazo_projeto = st.sidebar.slider("Prazo do Projeto (meses)", min_value=36, max_value=60, value=default_values["prazo_projeto"])
+    prazo_consorcio = st.sidebar.slider("Prazo do Consórcio (meses)", min_value=180, max_value=240, value=default_values["prazo_consorcio"])
+    percentual_lance = st.sidebar.slider("Percentual de Lance (%)", min_value=0.0, max_value=50.0, value=default_values["percentual_lance"], step=0.1)
 
-    st.sidebar.header("Simulação de Dropdowns")
-    num_dropdowns = st.sidebar.number_input("Número de Dropdowns", min_value=0, max_value=5, value=1)
-    dropdowns = []
-    for i in range(num_dropdowns):
-        col1, col2 = st.sidebar.columns(2)
-        mes = col1.number_input(f"Mês do Dropdown {i+1}", min_value=1, max_value=prazo_projeto, value=min(24*(i+1), prazo_projeto), key=f"mes_{i}")
-        valor = col2.number_input(f"Valor do Dropdown {i+1} (R$)", min_value=0.0, value=100000.0, step=10000.0, key=f"valor_{i}")
-        dropdowns.append((mes, valor))
+    mostrar_avancado = st.sidebar.checkbox("Mostrar parâmetros avançados")
+
+    if mostrar_avancado:
+        st.sidebar.header("Parâmetros Avançados")
+        taxa_admin = st.sidebar.slider("Taxa de Administração Anual (%)", min_value=0.1, max_value=20.0, value=default_values["taxa_admin"], step=0.1)
+        indice_correcao = st.sidebar.slider("Índice de Correção Anual (%)", min_value=0.0, max_value=15.0, value=default_values["indice_correcao"], step=0.1)
+        taxa_tradicional = st.sidebar.slider("Taxa de Juros Tradicional (% a.a.)", min_value=1.0, max_value=20.0, value=default_values["taxa_tradicional"], step=0.1)
+    else:
+        taxa_admin = default_values["taxa_admin"]
+        indice_correcao = default_values["indice_correcao"]
+        taxa_tradicional = default_values["taxa_tradicional"]
+
+    perfil_receita = st.sidebar.selectbox("Perfil de Receitas", ["Uniforme", "Crescente", "Concentrado no Fim"], index=["Uniforme", "Crescente", "Concentrado no Fim"].index(default_values["perfil_receita"]))
+    perfil_despesa = st.sidebar.selectbox("Perfil de Despesas", ["Uniforme", "Concentrado no Início", "Decrescente"], index=["Uniforme", "Concentrado no Início", "Decrescente"].index(default_values["perfil_despesa"]))
+
+    receitas = gerar_perfil(perfil_receita, valor_total * 1.3, prazo_projeto)
+    despesas = gerar_perfil(perfil_despesa, valor_total * 0.8, prazo_projeto)
 
     if st.sidebar.button("Calcular"):
         if percentual_lance >= 100:
             st.error("O percentual de lance não pode ser 100% ou maior.")
             return
 
-        fluxo_caixa = simular_fluxo_caixa(valor_total, prazo_projeto, prazo_consorcio, taxa_admin, percentual_lance, indice_correcao, receitas, despesas, dropdowns)
+        fluxo_caixa = simular_fluxo_caixa(valor_total, prazo_projeto, prazo_consorcio, taxa_admin, percentual_lance, indice_correcao, receitas, despesas, [])
         excedente = np.cumsum(fluxo_caixa)
         economia = calcular_economia(valor_total, taxa_tradicional, prazo_projeto, fluxo_caixa)
+
+        oportunidades_dropdown = identificar_oportunidades_dropdown(fluxo_caixa, excedente, prazo_projeto, prazo_consorcio, valor_total, percentual_lance)
 
         parcela_inicial = calcular_parcela_consorcio(valor_total, prazo_consorcio, taxa_admin, percentual_lance, 0, indice_correcao)
         valor_lance = valor_total * (percentual_lance / 100)
@@ -172,8 +191,17 @@ def main():
 
         with col2:
             st.header("Fluxo de Caixa e Excedente")
-            fig = plot_fluxos(fluxo_caixa, excedente, dropdowns)
+            fig = plot_fluxos_com_oportunidades(fluxo_caixa, excedente, oportunidades_dropdown)
             st.pyplot(fig)
+
+        st.header("Oportunidades de Dropdown")
+        if oportunidades_dropdown:
+            oportunidades_df = pd.DataFrame(oportunidades_dropdown, columns=["Mês", "Valor Sugerido", "Benefício Estimado"])
+            oportunidades_df["Valor Sugerido"] = oportunidades_df["Valor Sugerido"].apply(formatar_moeda)
+            oportunidades_df["Benefício Estimado"] = oportunidades_df["Benefício Estimado"].apply(formatar_moeda)
+            st.table(oportunidades_df)
+        else:
+            st.write("Não foram identificadas oportunidades significativas de dropdown.")
 
         st.header("Detalhamento do Fluxo de Caixa e Excedente")
         df = pd.DataFrame({
@@ -187,9 +215,6 @@ def main():
 
         if parcela_inicial > (valor_total * 0.03):
             st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
-
-    st.sidebar.info("Constructa - Versão Piloto")
-    st.warning("Atenção: O valor da parcela calculada é relativamente alto em relação ao valor total do projeto. Considere ajustar os parâmetros.")
 
     st.sidebar.info("Constructa - Versão Piloto")
     st.sidebar.warning("Este é um modelo simplificado para fins de demonstração. Consulte um profissional financeiro para decisões reais.")
