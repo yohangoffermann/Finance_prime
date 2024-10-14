@@ -216,7 +216,7 @@ if 'ct' in st.session_state:
     with col3:
         st.metric("Eficiência do Modelo", f"{st.session_state.eficiencia_modelo:.2f}")
 
-    # Validações
+# Validações
     st.subheader("Validações do Modelo")
     col1, col2, col3 = st.columns(3)
     with col1:
