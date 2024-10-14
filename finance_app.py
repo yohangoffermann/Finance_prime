@@ -10,7 +10,10 @@ def format_currency(value):
     """Formata o valor para o padrão monetário brasileiro."""
     if isinstance(value, str):
         value = parse_currency(value)
-    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    valor_str = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    partes = valor_str.split(",")
+    partes[0] = ".".join([partes[0][i:i+3] for i in range(0, len(partes[0]), 3)][::-1])
+    return f"R$ {','.join(partes)}"
 
 def parse_currency(value):
     """Converte uma string no formato monetário brasileiro para Decimal."""
@@ -69,15 +72,15 @@ def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
 st.sidebar.title("Parâmetros do Projeto")
 
 # Módulo 1: Crédito Otimizado
-valor_credito = st.sidebar.text_input("Valor do Crédito", value="R$ 100.000,00")
+valor_credito = st.sidebar.text_input("Valor do Crédito", value="R$ 1.000.000,00")
 prazo_meses = st.sidebar.number_input("Prazo (meses)", min_value=1, value=60, step=1)
 taxa_admin_anual = st.sidebar.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=10.0, step=0.1)
 indice_correcao_anual = st.sidebar.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1)
-valor_lance = st.sidebar.text_input("Valor do Lance", value="R$ 0,00")
+valor_lance = st.sidebar.text_input("Valor do Lance", value="R$ 100.000,00")
 
 # Módulo 2: Dados do Empreendimento
-vgv = st.sidebar.text_input("VGV", value="R$ 1.000.000,00")
-orcamento = st.sidebar.text_input("Orçamento", value="R$ 800.000,00")
+vgv = st.sidebar.text_input("VGV", value="R$ 10.000.000,00")
+orcamento = st.sidebar.text_input("Orçamento", value="R$ 8.000.000,00")
 prazo_empreendimento = st.sidebar.number_input("Prazo do Empreendimento (meses)", min_value=1, value=24, step=1)
 
 # Corpo principal
@@ -149,7 +152,7 @@ if 'dropdowns' not in st.session_state:
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    valor_dropdown = st.text_input("Valor do Dropdown", value="R$ 50.000,00")
+    valor_dropdown = st.text_input("Valor do Dropdown", value="R$ 500.000,00")
 with col2:
     agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1)
 with col3:
@@ -191,4 +194,4 @@ if st.button("Recalcular com Dropdowns"):
     st.metric("Nova Parcela após Dropdowns", format_currency(nova_parcela))
     st.metric("Saldo Final", format_currency(saldo_atual))
 
-st.sidebar.info("Constructa MVP - Versão 1.0.3")
+st.sidebar.info("Constructa MVP - Versão 1.0.4")
