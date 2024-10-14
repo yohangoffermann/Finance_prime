@@ -34,34 +34,9 @@ def calcular_lance_embutido(dnd, plt):
     cl = ct - le
     return ct, lp, le, cl
 
-def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual):
-    valor_credito = Decimal(str(valor_credito))
-    prazo_meses = Decimal(str(prazo_meses))
-    taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
-    indice_correcao_mensal = (Decimal('1') + Decimal(str(indice_correcao_anual)) / Decimal('100')) ** (Decimal('1') / Decimal('12')) - Decimal('1')
-    
-    taxa_efetiva = taxa_admin_mensal + indice_correcao_mensal
-    fator = (Decimal('1') - (Decimal('1') + taxa_efetiva) ** (-prazo_meses)) / taxa_efetiva
-    
-    parcela = valor_credito / fator
+def calcular_parcela(valor_credito, prazo_meses):
+    parcela = valor_credito / Decimal(str(prazo_meses))
     return parcela.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, meses_pagos):
-    valor_credito = Decimal(str(valor_credito))
-    parcela = Decimal(str(parcela))
-    taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
-    indice_correcao_anual = Decimal(str(indice_correcao_anual)) / Decimal('100')
-    
-    saldo = valor_credito
-    for mes in range(1, meses_pagos + 1):
-        if mes % 12 == 1 and mes > 12:  # Aplica correção no início de cada ano, a partir do segundo ano
-            saldo *= (Decimal('1') + indice_correcao_anual)
-        
-        juros_admin = saldo * taxa_admin_mensal
-        amortizacao = parcela - juros_admin
-        saldo -= amortizacao
-    
-    return max(saldo, Decimal('0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
     valor_efetivo = valor_dropdown * (Decimal('1') + Decimal(str(agio)) / Decimal('100'))
@@ -72,15 +47,13 @@ def update_simulation():
     dnd = parse_currency(st.session_state.dinheiro_novo_desejado)
     plt = Decimal(str(st.session_state.percentual_lance_total)) / Decimal('100')
     prazo_meses = st.session_state.prazo_meses
-    taxa_admin_anual = Decimal(str(st.session_state.taxa_admin_anual))
-    indice_correcao_anual = Decimal(str(st.session_state.indice_correcao_anual))
-
+    
     ct, lp, le, cl = calcular_lance_embutido(dnd, plt)
     st.session_state.ct, st.session_state.lp, st.session_state.le, st.session_state.cl = ct, lp, le, cl
     
-    parcela_inicial = calcular_parcela(cl, prazo_meses, taxa_admin_anual, indice_correcao_anual)
+    parcela_inicial = calcular_parcela(cl, prazo_meses)
     
-    saldos_padrao = [calcular_saldo_devedor(cl, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m) for m in range(prazo_meses + 1)]
+    saldos_padrao = [cl - (parcela_inicial * m) for m in range(prazo_meses + 1)]
     
     saldos_com_dropdowns = saldos_padrao.copy()
     saldo_atual = cl
@@ -92,11 +65,11 @@ def update_simulation():
             valor = parse_currency(dropdown['valor'])
             agio = Decimal(str(dropdown['agio']))
             
-            saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes - ultimo_mes_dropdown)
+            saldo_antes_dropdown = cl - (parcela_inicial * mes)
             saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
             
             for m in range(mes, prazo_meses + 1):
-                saldos_com_dropdowns[m] = calcular_saldo_devedor(saldo_apos_dropdown, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m - mes)
+                saldos_com_dropdowns[m] = saldo_apos_dropdown - (parcela_inicial * (m - mes))
             
             saldo_atual = saldo_apos_dropdown
             ultimo_mes_dropdown = mes
@@ -104,7 +77,7 @@ def update_simulation():
     st.session_state.saldos_com_dropdowns = saldos_com_dropdowns
     st.session_state.parcela_padrao = parcela_inicial
     st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[-1]
-    st.session_state.parcela_com_dropdown = calcular_parcela(saldos_com_dropdowns[-1], prazo_meses - ultimo_mes_dropdown, taxa_admin_anual, indice_correcao_anual)
+    st.session_state.parcela_com_dropdown = parcela_inicial  # A parcela não muda com dropdowns
 
     # Cálculo das relações percentuais
     st.session_state.relacao_parcela_cl = (parcela_inicial / cl * 100).quantize(Decimal('0.01'))
@@ -147,7 +120,7 @@ with st.sidebar:
     st.header("Parâmetros do Consórcio")
     
     if 'dinheiro_novo_desejado' not in st.session_state:
-        st.session_state.dinheiro_novo_desejado = "R$ 1.200.000,00"
+        st.session_state.dinheiro_novo_desejado = "R$ 1.300.000,00"
     dinheiro_novo_desejado = st.text_input("Dinheiro Novo Desejado", value=st.session_state.dinheiro_novo_desejado, key="input_dinheiro_novo_desejado")
     if dinheiro_novo_desejado != st.session_state.dinheiro_novo_desejado:
         st.session_state.dinheiro_novo_desejado = format_input_currency(dinheiro_novo_desejado)
@@ -159,25 +132,16 @@ with st.sidebar:
         st.session_state.percentual_lance_total = percentual_lance_total
 
     if 'prazo_meses' not in st.session_state:
-        st.session_state.prazo_meses = 220
+        st.session_state.prazo_meses = 240
     prazo_meses = st.number_input("Prazo (meses)", min_value=180, max_value=240, value=st.session_state.prazo_meses, step=1, key="input_prazo_meses")
     if prazo_meses != st.session_state.prazo_meses:
         st.session_state.prazo_meses = prazo_meses
 
-    if 'taxa_admin_anual' not in st.session_state:
-        st.session_state.taxa_admin_anual = 1.20
-    taxa_admin_anual = st.number_input("Taxa de Administração Anual (%)", min_value=0.0, value=st.session_state.taxa_admin_anual, step=0.01, key="input_taxa_admin_anual")
-    if taxa_admin_anual != st.session_state.taxa_admin_anual:
-        st.session_state.taxa_admin_anual = taxa_admin_anual
-
-    if 'indice_correcao_anual' not in st.session_state:
-        st.session_state.indice_correcao_anual = 5.0
-    indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=st.session_state.indice_correcao_anual, step=0.1, key="input_indice_correcao_anual")
-    if indice_correcao_anual != st.session_state.indice_correcao_anual:
-        st.session_state.indice_correcao_anual = indice_correcao_anual
+    st.session_state.indice_correcao_anual = st.number_input("Índice de Correção Anual (%) - Informativo", min_value=0.0, value=5.0, step=0.1, key="input_indice_correcao_anual")
+    st.caption("Nota: Este índice não é usado no cálculo inicial da parcela, mas pode ser usado para simulações futuras de correção pelo INCC.")
 
 # Atualizar simulação em tempo real
-if all(key in st.session_state for key in ['dinheiro_novo_desejado', 'percentual_lance_total', 'prazo_meses', 'taxa_admin_anual', 'indice_correcao_anual']):
+if all(key in st.session_state for key in ['dinheiro_novo_desejado', 'percentual_lance_total', 'prazo_meses']):
     update_simulation()
 
 # Exibir resultados do Padrão Lance Embutido
@@ -195,7 +159,7 @@ if 'ct' in st.session_state:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Parcela Mensal Inicial", format_currency(st.session_state.parcela_padrao))
+        st.metric("Parcela Mensal", format_currency(st.session_state.parcela_padrao))
     with col2:
         st.metric("Relação Parcela/Crédito Liberado", f"{st.session_state.relacao_parcela_cl}%")
         st.caption("Importante para gestão de fluxo de caixa")
@@ -209,7 +173,7 @@ if 'ct' in st.session_state:
     with col1:
         st.metric("Eficiência do Modelo", f"{st.session_state.eficiencia_modelo:.2f}")
     with col2:
-        prazo_efetivo = next((i for i, saldo in enumerate(st.session_state.saldos_com_dropdowns) if saldo == 0), st.session_state.prazo_meses)
+        prazo_efetivo = next((i for i, saldo in enumerate(st.session_state.saldos_com_dropdowns) if saldo <= 0), st.session_state.prazo_meses)
         st.metric("Prazo Efetivo (meses)", prazo_efetivo)
 
     # Validações
@@ -298,4 +262,4 @@ st.write(f"Lance Pago: {format_currency(st.session_state.lp)}")
 st.write(f"Lance Embutido: {format_currency(st.session_state.le)}")
 st.write(f"Crédito Liberado: {format_currency(st.session_state.cl)}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v2.2")
+st.sidebar.info("Constructa - Módulo de Consórcio v2.3")
