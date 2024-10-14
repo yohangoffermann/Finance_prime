@@ -85,7 +85,8 @@ def update_simulation():
 
     # Cálculo da eficiência do modelo e spread
     st.session_state.eficiencia_modelo = dnd / lp
-    st.session_state.spread = ct - (parcela_inicial * prazo_meses + lp)
+    total_parcelas = parcela_inicial * Decimal(str(prazo_meses))
+    st.session_state.spread = ct - (total_parcelas + lp)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_padrao, name='Amortização Padrão'))
@@ -227,11 +228,17 @@ if st.session_state.dropdowns:
 
 # Monitor de saldo devedor e parcela em tempo real (Com Dropdowns)
 st.subheader("Monitor de Amortização com Dropdowns")
-col1, col2 = st.columns(2)
+col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("Saldo Devedor Final", format_currency(st.session_state.saldo_com_dropdown_ultimo))
 with col2:
     st.metric("Parcela Final", format_currency(st.session_state.parcela_padrao))
+with col3:
+    if st.session_state.saldo_com_dropdown_ultimo > 0:
+        relacao_final = (st.session_state.parcela_padrao / st.session_state.saldo_com_dropdown_ultimo * 100).quantize(Decimal('0.01'))
+        st.metric("Relação Parcela/Saldo Final", f"{relacao_final}%")
+    else:
+        st.metric("Relação Parcela/Saldo Final", "N/A (Saldo Zero)")
 
 # Exibir eficiência e spread
 st.subheader("Eficiência e Spread")
@@ -250,7 +257,7 @@ st.write(f"Lance Embutido: {format_currency(st.session_state.le)}")
 st.write(f"Crédito Liberado: {format_currency(st.session_state.cl)}")
 
 # Cálculo do custo total dos dropdowns
-custo_total_dropdowns = sum(parse_currency(d['valor']) * (1 + d['agio']/100) for d in st.session_state.dropdowns)
+custo_total_dropdowns = sum(parse_currency(d['valor']) * (Decimal('1') + Decimal(str(d['agio']))/Decimal('100')) for d in st.session_state.dropdowns)
 st.write(f"Custo Total dos Dropdowns (incluindo ágio): {format_currency(custo_total_dropdowns)}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v2.5")
+st.sidebar.info("Constructa - Módulo de Consórcio v2.6")
