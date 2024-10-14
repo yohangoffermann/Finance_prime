@@ -103,6 +103,27 @@ def calcular_fluxo_caixa_com_consorcio(fluxo_caixa_original, valor_credito, parc
         fluxo_com_consorcio[i] -= parcela  # Saída das parcelas
     return fluxo_com_consorcio
 
+# Funções para criar gráficos
+def criar_grafico_fluxo_caixa(fluxo_caixa):
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=list(range(1, len(fluxo_caixa) + 1)), y=fluxo_caixa, name='Fluxo de Caixa'))
+    fig.update_layout(title="Fluxo de Caixa do Empreendimento", xaxis_title="Meses", yaxis_title="Valor (R$)")
+    return fig
+
+def criar_grafico_saldo_devedor(saldos_sem_dropdown, saldos_com_dropdown):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=list(range(len(saldos_sem_dropdown))), y=saldos_sem_dropdown, name='Sem Dropdown'))
+    fig.add_trace(go.Scatter(x=list(range(len(saldos_com_dropdown))), y=saldos_com_dropdown, name='Com Dropdown'))
+    fig.update_layout(title="Evolução do Saldo Devedor", xaxis_title="Meses", yaxis_title="Saldo (R$)")
+    return fig
+
+def criar_grafico_combinado(fluxo_caixa, fluxo_caixa_com_consorcio):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=list(range(1, len(fluxo_caixa) + 1)), y=fluxo_caixa, name='Fluxo de Caixa Original'))
+    fig.add_trace(go.Scatter(x=list(range(1, len(fluxo_caixa_com_consorcio) + 1)), y=fluxo_caixa_com_consorcio, name='Fluxo de Caixa com Consórcio'))
+    fig.update_layout(title="Interação Crédito-Fluxo de Caixa", xaxis_title="Meses", yaxis_title="Valor (R$)")
+    return fig
+
 # Função para atualizar todos os gráficos e métricas
 def update_all():
     valor_credito = Decimal(str(st.session_state.valor_credito))
@@ -134,28 +155,24 @@ def update_all():
     tir = calcular_tir(fluxo_caixa)
     tir_com_consorcio = calcular_tir(fluxo_caixa_com_consorcio)
 
-    # Atualizar gráfico de fluxo de caixa
-    fig_fluxo.data[0].x = list(range(1, len(fluxo_caixa) + 1))
-    fig_fluxo.data[0].y = fluxo_caixa
-    fluxo_chart.plotly_chart(fig_fluxo, use_container_width=True)
+    # Criar e exibir gráfico de fluxo de caixa
+    fig_fluxo = criar_grafico_fluxo_caixa(fluxo_caixa)
+    st.plotly_chart(fig_fluxo, use_container_width=True)
 
     # Atualizar tabela de fluxo de caixa
     df_fluxo = pd.DataFrame({
         'Mês': range(1, len(fluxo_caixa) + 1),
         'Fluxo de Caixa': [format_currency(fc) for fc in fluxo_caixa]
     })
-    fluxo_table.dataframe(df_fluxo)
+    st.dataframe(df_fluxo)
 
     # Atualizar métricas do projeto
-    vpl_metric.metric("VPL do Projeto", format_currency(vpl))
-    tir_metric.metric("TIR do Projeto", f"{tir*100:.2f}%")
-
-    # Atualizar gráfico de saldo devedor
-    saldos_sem_dropdown = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in range(prazo_meses + 1)]
-    fig_saldo.data[0].x = list(range(prazo_meses + 1))
-    fig_saldo.data[0].y = saldos_sem_dropdown
+    col1, col2 = st.columns(2)
+    col1.metric("VPL do Projeto", format_currency(vpl))
+    col2.metric("TIR do Projeto", f"{tir*100:.2f}%")
 
     # Cálculo e visualização dos dropdowns
+    saldos_sem_dropdown = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in range(prazo_meses + 1)]
     saldos_com_dropdown = saldos_sem_dropdown.copy()
     for dropdown in st.session_state.get('dropdowns', []):
         mes, valor, agio = dropdown['mes'], dropdown['valor'], dropdown['agio']
@@ -166,24 +183,23 @@ def update_all():
                 for i, saldo in enumerate(saldos_com_dropdown[mes:], start=mes)
             ]
     
-    fig_saldo.data[1].x = list(range(prazo_meses + 1))
-    fig_saldo.data[1].y = saldos_com_dropdown
-    saldo_chart.plotly_chart(fig_saldo, use_container_width=True)
+    # Criar e exibir gráfico de saldo devedor
+    fig_saldo = criar_grafico_saldo_devedor(saldos_sem_dropdown, saldos_com_dropdown)
+    st.plotly_chart(fig_saldo, use_container_width=True)
 
     # Atualizar métricas do consórcio
-    parcela_metric.metric("Parcela Mensal", format_currency(parcela))
-    relacao_metric.metric("Relação Parcela/Crédito Novo", f"{relacao_parcela_credito:.2f}%")
+    col1, col2 = st.columns(2)
+    col1.metric("Parcela Mensal", format_currency(parcela))
+    col2.metric("Relação Parcela/Crédito Novo", f"{relacao_parcela_credito:.2f}%")
 
-    # Atualizar gráfico combinado
-    fig_combinado.data[0].x = list(range(1, len(fluxo_caixa) + 1))
-    fig_combinado.data[0].y = fluxo_caixa
-    fig_combinado.data[1].x = list(range(1, len(fluxo_caixa_com_consorcio) + 1))
-    fig_combinado.data[1].y = fluxo_caixa_com_consorcio
-    combinado_chart.plotly_chart(fig_combinado, use_container_width=True)
+    # Criar e exibir gráfico combinado
+    fig_combinado = criar_grafico_combinado(fluxo_caixa, fluxo_caixa_com_consorcio)
+    st.plotly_chart(fig_combinado, use_container_width=True)
 
     # Atualizar métricas comparativas
-    vpl_consorcio_metric.metric("VPL do Projeto com Consórcio", format_currency(vpl_com_consorcio))
-    melhoria_vpl_metric.metric("Melhoria no VPL", format_currency(vpl_com_consorcio - vpl))
+    col1, col2 = st.columns(2)
+    col1.metric("VPL do Projeto com Consórcio", format_currency(vpl_com_consorcio))
+    col2.metric("Melhoria no VPL", format_currency(vpl_com_consorcio - vpl))
 
 # Interface do usuário
 # Sidebar para inputs principais
@@ -224,38 +240,6 @@ with col2:
 with col3:
     perfil_despesas = st.selectbox("Perfil de Despesas", ['Linear', 'Front-loaded', 'Back-loaded'], key="perfil_despesas")
 
-# 1. Fluxo de Caixa do Empreendimento
-st.header("Fluxo de Caixa do Empreendimento")
-
-# Gráfico de Fluxo de Caixa (placeholder)
-fig_fluxo = go.Figure()
-fig_fluxo.add_trace(go.Bar(x=[0], y=[0], name='Fluxo de Caixa'))
-fig_fluxo.update_layout(title="Fluxo de Caixa do Empreendimento", xaxis_title="Meses", yaxis_title="Valor (R$)")
-fluxo_chart = st.plotly_chart(fig_fluxo, use_container_width=True)
-
-# Tabela de Fluxo de Caixa (placeholder)
-fluxo_table = st.empty()
-
-# Métricas do projeto (placeholders)
-col1, col2 = st.columns(2)
-vpl_metric = col1.empty()
-tir_metric = col2.empty()
-
-# 2. Seção do Consórcio
-st.header("Simulação do Consórcio")
-
-# Gráfico de Saldo Devedor (placeholder)
-fig_saldo = go.Figure()
-fig_saldo.add_trace(go.Scatter(x=[0], y=[0], name='Sem Dropdown'))
-fig_saldo.add_trace(go.Scatter(x=[0], y=[0], name='Com Dropdown'))
-fig_saldo.update_layout(title="Evolução do Saldo Devedor", xaxis_title="Meses", yaxis_title="Saldo (R$)")
-saldo_chart = st.plotly_chart(fig_saldo, use_container_width=True)
-
-# Métricas do consórcio (placeholders)
-col1, col2 = st.columns(2)
-parcela_metric = col1.empty()
-relacao_metric = col2.empty()
-
 # Seção de Dropdowns
 st.subheader("Simulação de Dropdown")
 col1, col2, col3 = st.columns(3)
@@ -293,24 +277,8 @@ if 'dropdowns' in st.session_state and st.session_state.dropdowns:
                 st.session_state.dropdowns.pop(i)
                 st.experimental_rerun()
 
-# 3. Interação Crédito-Fluxo de Caixa
-st.header("Impacto do Consórcio no Fluxo de Caixa")
-
-# Gráfico combinado (placeholder)
-fig_combinado = go.Figure()
-fig_combinado.add_trace(go.Scatter(x=[0], y=[0], name='Fluxo de Caixa Original'))
-fig_combinado.add_trace(go.Scatter(x=[0], y=[0], name='Fluxo de Caixa com Consórcio'))
-fig_combinado.update_layout(title="Interação Crédito-Fluxo de Caixa", xaxis_title="Meses", yaxis_title="Valor (R$)")
-combinado_chart = st.plotly_chart(fig_combinado, use_container_width=True)
-
-# Métricas comparativas (placeholders)
-col1, col2 = st.columns(2)
-vpl_consorcio_metric = col1.empty()
-melhoria_vpl_metric = col2.empty()
-
 # Atualizar todos os gráficos e métricas quando qualquer input mudar
 if all(key in st.session_state for key in ['valor_credito', 'prazo_meses', 'taxa_admin_anual', 'indice_correcao_anual', 'valor_lance', 'vgv', 'orcamento', 'prazo_empreendimento', 'perfil_vendas', 'perfil_despesas', 'taxa_desconto_vpl']):
     update_all()
 
-st.sidebar.info("Constructa MVP - Versão 1.3.0")
-    
+st.sidebar.info("Constructa MVP - Versão 1.3.1")
