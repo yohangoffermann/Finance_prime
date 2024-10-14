@@ -1,7 +1,16 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+# Tente importar numpy, mas use uma alternativa se falhar
+try:
+    import numpy as np
+except ImportError:
+    print("NumPy não pôde ser importado. Usando alternativas.")
+    class np:
+        @staticmethod
+        def arange(*args, **kwargs):
+            return range(*args)
 
 # Funções de cálculo
 def calcular_relacao_parcela_credito(valor_cota, taxa_admin_anual, prazo_meses):
