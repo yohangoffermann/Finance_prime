@@ -61,16 +61,11 @@ def update_simulation():
         mes = dropdown['mes']
         valor = parse_currency(dropdown['valor'])
         
-        # Calcula o saldo antes do dropdown
         saldo_antes_dropdown = saldos_com_dropdowns[mes]
-        
-        # Aplica o dropdown
         saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor)
         
-        # Recalcula o número de parcelas restantes
         parcelas_restantes = max(1, (saldo_apos_dropdown / parcela_inicial).quantize(Decimal('1'), rounding=ROUND_UP))
         
-        # Atualiza os saldos futuros
         for m in range(mes, prazo_meses + 1):
             parcelas_passadas = m - mes
             if parcelas_passadas < parcelas_restantes:
@@ -78,17 +73,19 @@ def update_simulation():
             else:
                 saldos_com_dropdowns[m] = Decimal('0')
     
+    st.session_state.saldos_padrao = saldos_padrao
     st.session_state.saldos_com_dropdowns = saldos_com_dropdowns
     st.session_state.parcela_padrao = parcela_inicial
+    st.session_state.saldo_padrao_ultimo = saldos_padrao[-1]
     st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[-1]
-    st.session_state.parcela_com_dropdown = parcela_inicial  # A parcela não muda com dropdowns
 
     # Cálculo das relações percentuais
     st.session_state.relacao_parcela_cl = (parcela_inicial / cl * 100).quantize(Decimal('0.01'))
     st.session_state.relacao_parcela_dn = (parcela_inicial / dnd * 100).quantize(Decimal('0.01'))
 
-    # Cálculo da eficiência do modelo
+    # Cálculo da eficiência do modelo e spread
     st.session_state.eficiencia_modelo = dnd / lp
+    st.session_state.spread = ct - (parcela_inicial * prazo_meses + lp)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_padrao, name='Amortização Padrão'))
@@ -173,28 +170,13 @@ if 'ct' in st.session_state:
 
     st.markdown("---")
 
+    # Monitor de saldo devedor e parcela em tempo real (Amortização Tradicional)
+    st.subheader("Monitor de Amortização Tradicional")
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Eficiência do Modelo", f"{st.session_state.eficiencia_modelo:.2f}")
+        st.metric("Saldo Devedor Atual", format_currency(st.session_state.saldo_padrao_ultimo))
     with col2:
-        prazo_efetivo = next((i for i, saldo in enumerate(st.session_state.saldos_com_dropdowns) if saldo <= 0), st.session_state.prazo_meses)
-        st.metric("Prazo Efetivo (meses)", prazo_efetivo)
-
-    # Validações
-    st.subheader("Validações do Modelo")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        parcela_padrao = Decimal(str(st.session_state.parcela_padrao))
-        cl = Decimal(str(st.session_state.cl))
-        parcela_vs_cl = parcela_padrao <= Decimal('0.005') * cl
-        st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
-    with col2:
-        dnd = parse_currency(st.session_state.dinheiro_novo_desejado)
-        parcela_vs_dn = parcela_padrao <= Decimal('0.01') * dnd
-        st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
-    with col3:
-        lance_pago_embutido_iguais = st.session_state.lp == st.session_state.le
-        st.write(f"Lance Pago = Lance Embutido: {'' if lance_pago_embutido_iguais else ''}")
+        st.metric("Parcela Atual", format_currency(st.session_state.parcela_padrao))
 
 # Exibir gráfico
 if 'fig' in st.session_state:
@@ -243,20 +225,21 @@ if st.session_state.dropdowns:
                 update_simulation()
                 st.experimental_rerun()
 
-# Exibir métricas finais
-if 'saldo_com_dropdown_ultimo' in st.session_state:
-    st.subheader("Resultado Final com Dropdowns")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Saldo Devedor Final", format_currency(st.session_state.saldo_com_dropdown_ultimo))
-    with col2:
-        st.metric("Parcela Final", format_currency(st.session_state.parcela_com_dropdown))
-    with col3:
-        if st.session_state.saldo_com_dropdown_ultimo > 0:
-            relacao_final = (st.session_state.parcela_com_dropdown / st.session_state.saldo_com_dropdown_ultimo * 100).quantize(Decimal('0.01'))
-            st.metric("Relação Parcela/Saldo Final", f"{relacao_final}%")
-        else:
-            st.metric("Relação Parcela/Saldo Final", "N/A (Saldo Zero)")
+# Monitor de saldo devedor e parcela em tempo real (Com Dropdowns)
+st.subheader("Monitor de Amortização com Dropdowns")
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("Saldo Devedor Final", format_currency(st.session_state.saldo_com_dropdown_ultimo))
+with col2:
+    st.metric("Parcela Final", format_currency(st.session_state.parcela_padrao))
+
+# Exibir eficiência e spread
+st.subheader("Eficiência e Spread")
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("Eficiência do Modelo", f"{st.session_state.eficiencia_modelo:.2f}")
+with col2:
+    st.metric("Spread Capturado", format_currency(st.session_state.spread))
 
 # Informações adicionais
 st.subheader("Detalhes da Simulação")
@@ -270,4 +253,4 @@ st.write(f"Crédito Liberado: {format_currency(st.session_state.cl)}")
 custo_total_dropdowns = sum(parse_currency(d['valor']) * (1 + d['agio']/100) for d in st.session_state.dropdowns)
 st.write(f"Custo Total dos Dropdowns (incluindo ágio): {format_currency(custo_total_dropdowns)}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v2.4")
+st.sidebar.info("Constructa - Módulo de Consórcio v2.5")
