@@ -22,6 +22,11 @@ def format_input_currency(value):
         return format_currency(int(numeric_value) / 100)
     return "R$ 0,00"
 
+def calcular_saldo_maximo_dropdown(saldo_atual, parcela, taxa_admin_anual, indice_correcao_anual, meses_restantes):
+    saldo_final = calcular_saldo_devedor(saldo_atual, parcela, taxa_admin_anual, indice_correcao_anual, meses_restantes)
+    saldo_maximo = max(saldo_atual - saldo_final, Decimal('0'))
+    return saldo_maximo * Decimal('0.95')
+
 # Funções de cálculo
 def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual):
     valor_credito = Decimal(str(valor_credito))
@@ -176,16 +181,36 @@ with col3:
     novo_mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, value=60, step=1, key="novo_mes_dropdown")
 with col4:
     if st.button("Adicionar Dropdown"):
-        novo_dropdown = {
-            "valor": format_input_currency(novo_valor_dropdown),
-            "agio": novo_agio,
-            "mes": novo_mes_dropdown
-        }
-        if not any(d['mes'] == novo_mes_dropdown for d in st.session_state.dropdowns):
-            st.session_state.dropdowns.append(novo_dropdown)
-            st.session_state.dropdowns.sort(key=lambda x: x['mes'])
+        valor_credito = parse_currency(st.session_state.valor_credito)
+        valor_lance = parse_currency(st.session_state.valor_lance)
+        prazo_meses = st.session_state.prazo_meses
+        taxa_admin_anual = Decimal(str(st.session_state.taxa_admin_anual))
+        indice_correcao_anual = Decimal(str(st.session_state.indice_correcao_anual))
+        
+        parcela_inicial = calcular_parcela(valor_credito - valor_lance, prazo_meses, taxa_admin_anual, indice_correcao_anual)
+        saldo_atual = calcular_saldo_devedor(valor_credito - valor_lance, parcela_inicial, taxa_admin_anual, indice_correcao_anual, novo_mes_dropdown)
+        
+        for dropdown in st.session_state.dropdowns:
+            if dropdown['mes'] <= novo_mes_dropdown:
+                saldo_atual = aplicar_dropdown(saldo_atual, parse_currency(dropdown['valor']), dropdown['agio'])
+        
+        saldo_maximo = calcular_saldo_maximo_dropdown(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, prazo_meses - novo_mes_dropdown)
+        valor_dropdown = parse_currency(novo_valor_dropdown)
+        
+        if valor_dropdown <= saldo_maximo:
+            novo_dropdown = {
+                "valor": format_currency(valor_dropdown),
+                "agio": novo_agio,
+                "mes": novo_mes_dropdown
+            }
+            if not any(d['mes'] == novo_mes_dropdown for d in st.session_state.dropdowns):
+                st.session_state.dropdowns.append(novo_dropdown)
+                st.session_state.dropdowns.sort(key=lambda x: x['mes'])
+                st.success(f"Dropdown de {format_currency(valor_dropdown)} adicionado com sucesso.")
+            else:
+                st.error(f"Já existe um dropdown no mês {novo_mes_dropdown}. Escolha outro mês.")
         else:
-            st.error(f"Já existe um dropdown no mês {novo_mes_dropdown}. Escolha outro mês.")
+            st.warning(f"O valor máximo permitido para dropdown neste mês é {format_currency(saldo_maximo)}. Ajuste o valor e tente novamente.")
 
 # Exibir dropdowns adicionados
 if st.session_state.dropdowns:
@@ -243,4 +268,4 @@ st.write(f"Valor do Crédito: {st.session_state.valor_credito}")
 st.write(f"Valor do Lance: {st.session_state.valor_lance}")
 st.write(f"Crédito Efetivo: {format_currency(parse_currency(st.session_state.valor_credito) - parse_currency(st.session_state.valor_lance))}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v1.9")
+st.sidebar.info("Constructa - Módulo de Consórcio v2.0")
