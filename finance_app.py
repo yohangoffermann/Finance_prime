@@ -92,13 +92,13 @@ def calcular_fluxo_caixa_com_consorcio(fluxo_caixa_original, valor_credito, parc
 
 # Função para atualizar todos os gráficos e métricas
 def update_all():
-    valor_credito = st.session_state.valor_credito
+    valor_credito = Decimal(str(st.session_state.valor_credito))
     prazo_meses = st.session_state.prazo_meses
     taxa_admin_anual = st.session_state.taxa_admin_anual
     indice_correcao_anual = st.session_state.indice_correcao_anual
-    valor_lance = st.session_state.valor_lance
-    vgv = st.session_state.vgv
-    orcamento = st.session_state.orcamento
+    valor_lance = Decimal(str(st.session_state.valor_lance))
+    vgv = Decimal(str(st.session_state.vgv))
+    orcamento = Decimal(str(st.session_state.orcamento))
     prazo_empreendimento = st.session_state.prazo_empreendimento
     perfil_vendas = st.session_state.perfil_vendas
     perfil_despesas = st.session_state.perfil_despesas
@@ -175,9 +175,9 @@ def update_all():
 # Interface do usuário
 # Sidebar para inputs principais
 with st.sidebar:
-    valor_credito = st.text_input("Valor do Crédito", value="10000000", key="valor_credito")
-    valor_credito = parse_currency(valor_credito)
-    st.session_state.valor_credito = valor_credito
+    valor_credito_str = st.text_input("Valor do Crédito", value="10000000", key="valor_credito_str")
+    valor_credito = parse_currency(valor_credito_str)
+    st.session_state.valor_credito = float(valor_credito)
 
     prazo_meses = st.number_input("Prazo do Consórcio (meses)", min_value=12, max_value=240, value=60, step=12, key="prazo_meses")
     
@@ -185,17 +185,17 @@ with st.sidebar:
     
     indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1, key="indice_correcao_anual")
     
-    valor_lance = st.text_input("Valor do Lance", value="2000000", key="valor_lance")
-    valor_lance = parse_currency(valor_lance)
-    st.session_state.valor_lance = valor_lance
+    valor_lance_str = st.text_input("Valor do Lance", value="2000000", key="valor_lance_str")
+    valor_lance = parse_currency(valor_lance_str)
+    st.session_state.valor_lance = float(valor_lance)
 
-    vgv = st.text_input("VGV", value="10000000", key="vgv")
-    vgv = parse_currency(vgv)
-    st.session_state.vgv = vgv
+    vgv_str = st.text_input("VGV", value="10000000", key="vgv_str")
+    vgv = parse_currency(vgv_str)
+    st.session_state.vgv = float(vgv)
 
-    orcamento = st.text_input("Orçamento", value="8000000", key="orcamento")
-    orcamento = parse_currency(orcamento)
-    st.session_state.orcamento = orcamento
+    orcamento_str = st.text_input("Orçamento", value="8000000", key="orcamento_str")
+    orcamento = parse_currency(orcamento_str)
+    st.session_state.orcamento = float(orcamento)
 
     taxa_desconto_vpl = st.number_input("Taxa de Desconto para VPL (%)", min_value=0.0, value=10.0, step=0.1, key="taxa_desconto_vpl")
 
@@ -247,8 +247,8 @@ relacao_metric = col2.empty()
 st.subheader("Simulação de Dropdown")
 col1, col2, col3 = st.columns(3)
 with col1:
-    valor_dropdown = st.text_input("Valor do Dropdown", value="500000", key="valor_dropdown")
-    valor_dropdown = parse_currency(valor_dropdown)
+    valor_dropdown_str = st.text_input("Valor do Dropdown", value="500000", key="valor_dropdown_str")
+    valor_dropdown = parse_currency(valor_dropdown_str)
 with col2:
     agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1, key="agio")
 with col3:
@@ -258,7 +258,7 @@ if st.button("Adicionar Dropdown"):
     if 'dropdowns' not in st.session_state:
         st.session_state.dropdowns = []
     st.session_state.dropdowns.append({
-        "valor": valor_dropdown,
+        "valor": float(valor_dropdown),
         "agio": agio,
         "mes": mes_dropdown
     })
