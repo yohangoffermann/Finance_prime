@@ -10,7 +10,7 @@ def format_currency(value):
     if isinstance(value, str):
         value = parse_currency(value)
     return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-    
+
 def parse_currency(value):
     if isinstance(value, (int, float, Decimal)):
         return Decimal(str(value))
@@ -26,11 +26,11 @@ def format_input_currency(value):
 if 'dropdowns' not in st.session_state:
     st.session_state.dropdowns = []
 
-# Novas funções para o Padrão Lance Embutido
+# Funções de cálculo
 def calcular_lance_embutido(dnd, plt):
     lp = dnd * (plt / (Decimal('2') - plt))
     ct = (dnd + lp) / (Decimal('1') - (plt / Decimal('2')))
-    le = ct * (plt / Decimal('2'))
+    le = lp  # Lance embutido igual ao lance pago
     cl = ct - le
     return ct, lp, le, cl
 
@@ -101,29 +101,17 @@ def update_simulation():
             saldo_atual = saldo_apos_dropdown
             ultimo_mes_dropdown = mes
 
-    # Calcular saldo e parcela no momento do último dropdown
-    if st.session_state.dropdowns:
-        ultimo_mes = st.session_state.dropdowns[-1]['mes']
-        st.session_state.saldo_padrao_ultimo_dropdown = saldos_padrao[ultimo_mes]
-        st.session_state.parcela_padrao = parcela_inicial
-        st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[ultimo_mes]
-        st.session_state.parcela_com_dropdown = calcular_parcela(saldos_com_dropdowns[ultimo_mes], prazo_meses - ultimo_mes, taxa_admin_anual, indice_correcao_anual)
-    else:
-        st.session_state.saldo_padrao_ultimo_dropdown = cl
-        st.session_state.parcela_padrao = parcela_inicial
-        st.session_state.saldo_com_dropdown_ultimo = cl
-        st.session_state.parcela_com_dropdown = parcela_inicial
+    st.session_state.saldos_com_dropdowns = saldos_com_dropdowns
+    st.session_state.parcela_padrao = parcela_inicial
+    st.session_state.saldo_com_dropdown_ultimo = saldos_com_dropdowns[-1]
+    st.session_state.parcela_com_dropdown = calcular_parcela(saldos_com_dropdowns[-1], prazo_meses - ultimo_mes_dropdown, taxa_admin_anual, indice_correcao_anual)
 
-    # Calcular relações percentuais parcela/saldo devedor
-    if st.session_state.saldo_padrao_ultimo_dropdown > 0:
-        st.session_state.relacao_parcela_saldo_padrao = (st.session_state.parcela_padrao / st.session_state.saldo_padrao_ultimo_dropdown) * 100
-    else:
-        st.session_state.relacao_parcela_saldo_padrao = 0
+    # Cálculo das relações percentuais
+    st.session_state.relacao_parcela_cl = (parcela_inicial / cl * 100).quantize(Decimal('0.01'))
+    st.session_state.relacao_parcela_dn = (parcela_inicial / dnd * 100).quantize(Decimal('0.01'))
 
-    if st.session_state.saldo_com_dropdown_ultimo > 0:
-        st.session_state.relacao_parcela_saldo_com_dropdown = (st.session_state.parcela_com_dropdown / st.session_state.saldo_com_dropdown_ultimo) * 100
-    else:
-        st.session_state.relacao_parcela_saldo_com_dropdown = 0
+    # Cálculo da eficiência do modelo
+    st.session_state.eficiencia_modelo = dnd / lp
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_padrao, name='Amortização Padrão'))
@@ -151,9 +139,6 @@ def update_simulation():
     )
     st.session_state.fig = fig
 
-    # Cálculo da eficiência do modelo
-    st.session_state.eficiencia_modelo = dnd / lp
-
 # Interface do usuário
 st.title("Constructa - Simulador de Consórcio com Padrão Lance Embutido")
 
@@ -162,7 +147,7 @@ with st.sidebar:
     st.header("Parâmetros do Consórcio")
     
     if 'dinheiro_novo_desejado' not in st.session_state:
-        st.session_state.dinheiro_novo_desejado = "R$ 1.000.000,00"
+        st.session_state.dinheiro_novo_desejado = "R$ 1.200.000,00"
     dinheiro_novo_desejado = st.text_input("Dinheiro Novo Desejado", value=st.session_state.dinheiro_novo_desejado, key="input_dinheiro_novo_desejado")
     if dinheiro_novo_desejado != st.session_state.dinheiro_novo_desejado:
         st.session_state.dinheiro_novo_desejado = format_input_currency(dinheiro_novo_desejado)
@@ -174,7 +159,7 @@ with st.sidebar:
         st.session_state.percentual_lance_total = percentual_lance_total
 
     if 'prazo_meses' not in st.session_state:
-        st.session_state.prazo_meses = 200
+        st.session_state.prazo_meses = 220
     prazo_meses = st.number_input("Prazo (meses)", min_value=180, max_value=240, value=st.session_state.prazo_meses, step=1, key="input_prazo_meses")
     if prazo_meses != st.session_state.prazo_meses:
         st.session_state.prazo_meses = prazo_meses
@@ -212,13 +197,20 @@ if 'ct' in st.session_state:
     with col1:
         st.metric("Parcela Mensal Inicial", format_currency(st.session_state.parcela_padrao))
     with col2:
-        relacao_parcela_cl = (st.session_state.parcela_padrao / st.session_state.cl * 100).quantize(Decimal('0.01'))
-        st.metric("Relação Parcela/Crédito Liberado", f"{relacao_parcela_cl}%")
+        st.metric("Relação Parcela/Crédito Liberado", f"{st.session_state.relacao_parcela_cl}%")
+        st.caption("Importante para gestão de fluxo de caixa")
     with col3:
-        eficiencia = st.session_state.eficiencia_modelo.quantize(Decimal('0.01'))
-        st.metric("Eficiência do Modelo", f"{eficiencia}")
+        st.metric("Relação Parcela/Dinheiro Novo", f"{st.session_state.relacao_parcela_dn}%")
+        st.caption("Indica o custo mensal do dinheiro novo obtido")
 
     st.markdown("---")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Eficiência do Modelo", f"{st.session_state.eficiencia_modelo:.2f}")
+    with col2:
+        prazo_efetivo = next((i for i, saldo in enumerate(st.session_state.saldos_com_dropdowns) if saldo == 0), st.session_state.prazo_meses)
+        st.metric("Prazo Efetivo (meses)", prazo_efetivo)
 
     # Validações
     st.subheader("Validações do Modelo")
@@ -228,38 +220,17 @@ if 'ct' in st.session_state:
         cl = Decimal(str(st.session_state.cl))
         parcela_vs_cl = parcela_padrao <= Decimal('0.005') * cl
         st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
-    with col2:
+        with col2:
         dnd = parse_currency(st.session_state.dinheiro_novo_desejado)
         parcela_vs_dn = parcela_padrao <= Decimal('0.01') * dnd
         st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
     with col3:
-        prazo_valido = st.session_state.prazo_meses >= 180
-        st.write(f"Prazo ≥ 180 meses: {'' if prazo_valido else ''}")
-    with col4:
-        relacao_parcela_cl = (parcela_padrao / cl * 100).quantize(Decimal('0.01'))
-        relacao_aceitavel = relacao_parcela_cl <= Decimal('0.7')
-        st.write(f"Relação Parcela/Crédito Liberado ≤ 0.7%: {'' if relacao_aceitavel else ''}")
+        lance_pago_embutido_iguais = st.session_state.lp == st.session_state.le
+        st.write(f"Lance Pago = Lance Embutido: {'' if lance_pago_embutido_iguais else ''}")
 
-
-# Validações
-    st.subheader("Validações do Modelo")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        parcela_padrao = Decimal(str(st.session_state.parcela_padrao))
-        cl = Decimal(str(st.session_state.cl))
-        parcela_vs_cl = parcela_padrao <= Decimal('0.005') * cl
-        st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
-    with col2:
-        dnd = parse_currency(st.session_state.dinheiro_novo_desejado)
-        parcela_vs_dn = parcela_padrao <= Decimal('0.01') * dnd
-        st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
-    with col3:
-        prazo_valido = st.session_state.prazo_meses >= 180
-        st.write(f"Prazo ≥ 180 meses: {'' if prazo_valido else ''}")
-    with col4:
-        relacao_parcela_cl = (parcela_padrao / cl * 100).quantize(Decimal('0.01'))
-        relacao_aceitavel = relacao_parcela_cl <= Decimal('0.7')
-        st.write(f"Relação Parcela/Crédito Liberado ≤ 0.7%: {'' if relacao_aceitavel else ''}")
+# Exibir gráfico
+if 'fig' in st.session_state:
+    st.plotly_chart(st.session_state.fig, use_container_width=True)
 
 # Seção de Dropdowns
 st.subheader("Simulação de Dropdowns")
@@ -304,12 +275,8 @@ if st.session_state.dropdowns:
                 update_simulation()
                 st.experimental_rerun()
 
-# Exibir gráfico
-if 'fig' in st.session_state:
-    st.plotly_chart(st.session_state.fig, use_container_width=True)
-
 # Exibir métricas finais
-if all(key in st.session_state for key in ['saldo_com_dropdown_ultimo', 'parcela_com_dropdown', 'relacao_parcela_saldo_com_dropdown']):
+if 'saldo_com_dropdown_ultimo' in st.session_state:
     st.subheader("Resultado Final com Dropdowns")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -318,7 +285,8 @@ if all(key in st.session_state for key in ['saldo_com_dropdown_ultimo', 'parcela
         st.metric("Parcela Final", format_currency(st.session_state.parcela_com_dropdown))
     with col3:
         if st.session_state.saldo_com_dropdown_ultimo > 0:
-            st.metric("Relação Parcela/Saldo Final", f"{st.session_state.relacao_parcela_saldo_com_dropdown:.2f}%")
+            relacao_final = (st.session_state.parcela_com_dropdown / st.session_state.saldo_com_dropdown_ultimo * 100).quantize(Decimal('0.01'))
+            st.metric("Relação Parcela/Saldo Final", f"{relacao_final}%")
         else:
             st.metric("Relação Parcela/Saldo Final", "N/A (Saldo Zero)")
 
