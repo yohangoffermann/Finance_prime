@@ -214,7 +214,7 @@ with st.sidebar:
     
     indice_correcao_anual = st.number_input("Índice de Correção Anual (%)", min_value=0.0, value=5.0, step=0.1, key="indice_correcao_anual")
     
-    valor_lance_str = st.text_input("Valor do Lance", value="R$ 2.000.000,00", key="valor_lance_str")
+        valor_lance_str = st.text_input("Valor do Lance", value="R$ 2.000.000,00", key="valor_lance_str")
     valor_lance_str = format_input_currency(valor_lance_str)
     st.session_state.valor_lance = convert_currency_to_float(valor_lance_str)
 
@@ -242,7 +242,7 @@ with col3:
 
 # Seção de Dropdowns
 st.subheader("Simulação de Dropdown")
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
 with col1:
     valor_dropdown_str = st.text_input("Valor do Dropdown", value="R$ 500.000,00", key="valor_dropdown_str")
     valor_dropdown_str = format_input_currency(valor_dropdown_str)
@@ -250,17 +250,17 @@ with col1:
 with col2:
     agio = st.number_input("Ágio (%)", min_value=0.0, value=5.0, step=0.1, key="agio")
 with col3:
-    mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, value=12, step=1, key="mes_dropdown")
-
-if st.button("Adicionar Dropdown"):
-    if 'dropdowns' not in st.session_state:
-        st.session_state.dropdowns = []
-    st.session_state.dropdowns.append({
-        "valor": valor_dropdown,
-        "agio": agio,
-        "mes": mes_dropdown
-    })
-    st.experimental_rerun()
+    mes_dropdown = st.number_input("Mês do Dropdown", min_value=1, max_value=st.session_state.prazo_meses, value=12, step=1, key="mes_dropdown")
+with col4:
+    if st.button("Adicionar Dropdown"):
+        if 'dropdowns' not in st.session_state:
+            st.session_state.dropdowns = []
+        st.session_state.dropdowns.append({
+            "valor": valor_dropdown,
+            "agio": agio,
+            "mes": mes_dropdown
+        })
+        st.experimental_rerun()
 
 if 'dropdowns' in st.session_state and st.session_state.dropdowns:
     st.write("Dropdowns Adicionados:")
@@ -273,12 +273,15 @@ if 'dropdowns' in st.session_state and st.session_state.dropdowns:
         with col3:
             st.write(f"Mês: {dropdown['mes']}")
         with col4:
-            if st.button(f"Remover {i+1}"):
+            if st.button(f"Remover {i+1}", key=f"remove_{i}"):
                 st.session_state.dropdowns.pop(i)
                 st.experimental_rerun()
+
+    # Ordenar os dropdowns por mês
+    st.session_state.dropdowns.sort(key=lambda x: x['mes'])
 
 # Atualizar todos os gráficos e métricas quando qualquer input mudar
 if all(key in st.session_state for key in ['valor_credito', 'prazo_meses', 'taxa_admin_anual', 'indice_correcao_anual', 'valor_lance', 'vgv', 'orcamento', 'prazo_empreendimento', 'perfil_vendas', 'perfil_despesas', 'taxa_desconto_vpl']):
     update_all()
 
-st.sidebar.info("Constructa MVP - Versão 1.3.1")
+st.sidebar.info("Constructa MVP - Versão 1.3.2")
