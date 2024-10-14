@@ -27,6 +27,40 @@ def calcular_saldo_maximo_dropdown(saldo_atual, parcela, taxa_admin_anual, indic
     saldo_maximo = max(saldo_atual - saldo_final, Decimal('0'))
     return saldo_maximo * Decimal('0.95')
 
+def gerar_relatorio_final(valor_credito, valor_lance, prazo_meses, dropdowns, parcelas_pagas, saldo_final):
+    credito_novo = valor_credito - valor_lance
+    total_parcelas = sum(parcelas_pagas)
+    total_dropdowns = sum(parse_currency(d['valor']) for d in dropdowns)
+    total_pago = total_parcelas + total_dropdowns
+    spread = credito_novo - total_pago
+    
+    relatorio = f"""
+    ## Relatório Final de Eficiência da Amortização
+    
+    ### Dados Iniciais:
+    - Crédito Contratado: {format_currency(valor_credito)}
+    - Lance: {format_currency(valor_lance)}
+    - Crédito Novo: {format_currency(credito_novo)}
+    - Prazo Original: {prazo_meses} meses
+    
+    ### Resultado da Operação:
+    - Número de parcelas pagas: {len(parcelas_pagas)}
+    - Total pago em parcelas: {format_currency(total_parcelas)}
+    - Número de dropdowns realizados: {len(dropdowns)}
+    - Total usado em dropdowns: {format_currency(total_dropdowns)}
+    - Saldo devedor final: {format_currency(saldo_final)}
+    
+    ### Análise de Eficiência:
+    - Total desembolsado: {format_currency(total_pago)}
+    - Spread capturado: {format_currency(spread)}
+    - Eficiência da operação: {(spread / credito_novo * 100):.2f}%
+    
+    Esta operação resultou em uma economia de {format_currency(spread)} em relação ao crédito novo contratado,
+    representando uma eficiência de {(spread / credito_novo * 100):.2f}% na utilização do consórcio com a
+    estratégia de dropdowns.
+    """
+    return relatorio
+
 # Funções de cálculo
 def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual):
     valor_credito = Decimal(str(valor_credito))
@@ -76,19 +110,21 @@ def update_simulation():
     saldos_com_dropdowns = saldos_padrao.copy()
     saldo_atual = valor_credito - valor_lance
     ultimo_mes_dropdown = 0
-    for dropdown in st.session_state.dropdowns:
-        mes = dropdown['mes']
-        valor = parse_currency(dropdown['valor'])
-        agio = Decimal(str(dropdown['agio']))
+    parcelas_pagas = []
+    for mes in range(1, prazo_meses + 1):
+        if mes <= ultimo_mes_dropdown:
+            parcela_paga = parcela_inicial
+        else:
+            parcela_paga = st.session_state.parcela_com_dropdown if 'parcela_com_dropdown' in st.session_state else parcela_inicial
+        parcelas_pagas.append(parcela_paga)
+        saldo_atual = calcular_saldo_devedor(saldo_atual, parcela_paga, taxa_admin_anual, indice_correcao_anual, 1)
         
-        saldo_antes_dropdown = calcular_saldo_devedor(saldo_atual, parcela_inicial, taxa_admin_anual, indice_correcao_anual, mes - ultimo_mes_dropdown)
-        saldo_apos_dropdown = aplicar_dropdown(saldo_antes_dropdown, valor, agio)
+        for dropdown in st.session_state.dropdowns:
+            if dropdown['mes'] == mes:
+                saldo_atual = aplicar_dropdown(saldo_atual, parse_currency(dropdown['valor']), dropdown['agio'])
+                ultimo_mes_dropdown = mes
         
-        for m in range(mes, prazo_meses + 1):
-            saldos_com_dropdowns[m] = calcular_saldo_devedor(saldo_apos_dropdown, parcela_inicial, taxa_admin_anual, indice_correcao_anual, m - mes)
-        
-        saldo_atual = saldo_apos_dropdown
-        ultimo_mes_dropdown = mes
+        saldos_com_dropdowns[mes] = saldo_atual
 
     # Calcular saldo e parcela no momento do último dropdown
     if st.session_state.dropdowns:
@@ -140,6 +176,21 @@ def update_simulation():
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.session_state.fig = fig
+
+    st.session_state.saldo_final = saldo_atual
+    st.session_state.parcelas_pagas = parcelas_pagas
+
+    # Verificar se o saldo está próximo de zero e gerar o relatório
+    if saldo_atual < Decimal('1000'):  # Consideramos "próximo de zero" como menos de R$ 1.000,00
+        relatorio = gerar_relatorio_final(
+            valor_credito,
+            valor_lance,
+            prazo_meses,
+            st.session_state.dropdowns,
+            parcelas_pagas,
+            saldo_atual
+        )
+        st.session_state.relatorio_final = relatorio
 
 # Interface do usuário
 st.title("Constructa - Simulador de Consórcio com Múltiplos Dropdowns")
@@ -262,10 +313,14 @@ if all(key in st.session_state for key in ['saldo_com_dropdown_ultimo', 'parcela
         else:
             st.metric("Relação Parcela/Saldo (Com Dropdowns)", "N/A (Saldo Zero)")
 
+# Exibir relatório final se o saldo estiver próximo de zero
+if 'relatorio_final' in st.session_state:
+    st.markdown(st.session_state.relatorio_final)
+
 # Informações adicionais
 st.subheader("Detalhes da Simulação")
 st.write(f"Valor do Crédito: {st.session_state.valor_credito}")
 st.write(f"Valor do Lance: {st.session_state.valor_lance}")
 st.write(f"Crédito Efetivo: {format_currency(parse_currency(st.session_state.valor_credito) - parse_currency(st.session_state.valor_lance))}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v2.0")
+st.sidebar.info("Constructa - Módulo de Consórcio v2.1")
