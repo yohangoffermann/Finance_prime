@@ -100,8 +100,15 @@ def update_simulation():
         st.session_state.parcela_com_dropdown = parcela_inicial
 
     # Calcular relações percentuais parcela/saldo devedor
-    st.session_state.relacao_parcela_saldo_padrao = (st.session_state.parcela_padrao / st.session_state.saldo_padrao_ultimo_dropdown) * 100
-    st.session_state.relacao_parcela_saldo_com_dropdown = (st.session_state.parcela_com_dropdown / st.session_state.saldo_com_dropdown_ultimo) * 100
+    if st.session_state.saldo_padrao_ultimo_dropdown > 0:
+        st.session_state.relacao_parcela_saldo_padrao = (st.session_state.parcela_padrao / st.session_state.saldo_padrao_ultimo_dropdown) * 100
+    else:
+        st.session_state.relacao_parcela_saldo_padrao = 0
+
+    if st.session_state.saldo_com_dropdown_ultimo > 0:
+        st.session_state.relacao_parcela_saldo_com_dropdown = (st.session_state.parcela_com_dropdown / st.session_state.saldo_com_dropdown_ultimo) * 100
+    else:
+        st.session_state.relacao_parcela_saldo_com_dropdown = 0
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(range(prazo_meses + 1)), y=saldos_padrao, name='Amortização Padrão'))
@@ -208,7 +215,10 @@ if all(key in st.session_state for key in ['saldo_padrao_ultimo_dropdown', 'parc
     with col2:
         st.metric("Parcela (Amortização Padrão)", format_currency(st.session_state.parcela_padrao))
     with col3:
-        st.metric("Relação Parcela/Saldo (Amortização Padrão)", f"{st.session_state.relacao_parcela_saldo_padrao:.2f}%")
+        if st.session_state.saldo_padrao_ultimo_dropdown > 0:
+            st.metric("Relação Parcela/Saldo (Amortização Padrão)", f"{st.session_state.relacao_parcela_saldo_padrao:.2f}%")
+        else:
+            st.metric("Relação Parcela/Saldo (Amortização Padrão)", "N/A (Saldo Zero)")
 
 # Exibir gráfico
 if 'fig' in st.session_state:
@@ -221,8 +231,11 @@ if all(key in st.session_state for key in ['saldo_com_dropdown_ultimo', 'parcela
         st.metric("Saldo Devedor (Com Dropdowns)", format_currency(st.session_state.saldo_com_dropdown_ultimo))
     with col2:
         st.metric("Parcela (Com Dropdowns)", format_currency(st.session_state.parcela_com_dropdown))
-    with col3:
-        st.metric("Relação Parcela/Saldo (Com Dropdowns)", f"{st.session_state.relacao_parcela_saldo_com_dropdown:.2f}%")
+        with col3:
+        if st.session_state.saldo_com_dropdown_ultimo > 0:
+            st.metric("Relação Parcela/Saldo (Com Dropdowns)", f"{st.session_state.relacao_parcela_saldo_com_dropdown:.2f}%")
+        else:
+            st.metric("Relação Parcela/Saldo (Com Dropdowns)", "N/A (Saldo Zero)")
 
 # Informações adicionais
 st.subheader("Detalhes da Simulação")
@@ -230,4 +243,4 @@ st.write(f"Valor do Crédito: {st.session_state.valor_credito}")
 st.write(f"Valor do Lance: {st.session_state.valor_lance}")
 st.write(f"Crédito Efetivo: {format_currency(parse_currency(st.session_state.valor_credito) - parse_currency(st.session_state.valor_lance))}")
 
-st.sidebar.info("Constructa - Módulo de Consórcio v1.8")
+st.sidebar.info("Constructa - Módulo de Consórcio v1.9")
