@@ -220,7 +220,7 @@ if 'ct' in st.session_state:
         cl = Decimal(str(st.session_state.cl))
         parcela_vs_cl = parcela_padrao <= Decimal('0.005') * cl
         st.write(f"Parcela ≤ 0.5% do Crédito Liberado: {'' if parcela_vs_cl else ''}")
-        with col2:
+    with col2:
         dnd = parse_currency(st.session_state.dinheiro_novo_desejado)
         parcela_vs_dn = parcela_padrao <= Decimal('0.01') * dnd
         st.write(f"Parcela ≤ 1% do Dinheiro Novo: {'' if parcela_vs_dn else ''}")
