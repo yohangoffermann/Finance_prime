@@ -7,16 +7,11 @@ from decimal import Decimal, ROUND_HALF_UP
 st.set_page_config(page_title="Constructa MVP", layout="wide")
 
 def format_currency(value):
-    """Formata o valor para o padrão monetário brasileiro."""
     if isinstance(value, str):
         value = parse_currency(value)
-    valor_str = f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    partes = valor_str.split(",")
-    partes[0] = ".".join([partes[0][i:i+3] for i in range(0, len(partes[0]), 3)][::-1])
-    return f"R$ {','.join(partes)}"
+    return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 def parse_currency(value):
-    """Converte uma string no formato monetário brasileiro para Decimal."""
     if isinstance(value, (int, float, Decimal)):
         return Decimal(str(value))
     return Decimal(value.replace('R$', '').replace('.', '').replace(',', '.').strip())
@@ -26,8 +21,9 @@ def calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correc
     prazo_meses = Decimal(str(prazo_meses))
     taxa_admin_mensal = Decimal(str(taxa_admin_anual)) / Decimal('12') / Decimal('100')
     indice_correcao_mensal = (Decimal('1') + Decimal(str(indice_correcao_anual))/Decimal('100'))**(Decimal('1')/Decimal('12')) - Decimal('1')
-    fator = (Decimal('1') + indice_correcao_mensal) / (Decimal('1') - (Decimal('1') + indice_correcao_mensal)**(-prazo_meses))
-    parcela = valor_credito * (fator + taxa_admin_mensal)
+    fator = (indice_correcao_mensal * (1 + indice_correcao_mensal)**prazo_meses) / ((1 + indice_correcao_mensal)**prazo_meses - 1)
+    parcela = valor_credito * fator
+    parcela += valor_credito * taxa_admin_mensal
     return parcela.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, meses_pagos):
@@ -68,6 +64,13 @@ def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
     novo_saldo = max(saldo_devedor - valor_efetivo, Decimal('0'))
     return novo_saldo.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+def calcular_vpl(fluxo_caixa, taxa_desconto):
+    taxa_desconto = Decimal(str(taxa_desconto)) / Decimal('100')
+    vpl = Decimal('0')
+    for i, valor in enumerate(fluxo_caixa):
+        vpl += Decimal(str(valor)) / (1 + taxa_desconto) ** Decimal(str(i))
+    return vpl.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
 # Sidebar para inputs principais
 st.sidebar.title("Parâmetros do Projeto")
 
@@ -82,6 +85,7 @@ valor_lance = st.sidebar.text_input("Valor do Lance", value="R$ 2.000.000,00")
 vgv = st.sidebar.text_input("VGV", value="R$ 10.000.000,00")
 orcamento = st.sidebar.text_input("Orçamento", value="R$ 8.000.000,00")
 prazo_empreendimento = st.sidebar.number_input("Prazo do Empreendimento (meses)", min_value=1, value=24, step=1)
+taxa_desconto_vpl = st.sidebar.number_input("Taxa de Desconto para VPL (%)", min_value=0.0, value=10.0, step=0.1)
 
 # Corpo principal
 st.title("Constructa MVP")
@@ -101,54 +105,59 @@ if st.button("Calcular"):
         vgv = parse_currency(vgv)
         orcamento = parse_currency(orcamento)
 
-        parcela = calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual)
-        credito_novo = valor_credito - valor_lance
-        relacao_parcela_credito = (parcela / credito_novo) * Decimal('100')
-        
-        fluxo_caixa = calcular_fluxo_caixa(vgv, orcamento, prazo_empreendimento, perfil_vendas, perfil_despesas)
-        
-        # Exibição de resultados principais
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Parcela Mensal", format_currency(parcela))
-        with col2:
-            st.metric("Relação Parcela/Crédito Novo", f"{relacao_parcela_credito:.2f}%")
-        with col3:
-            st.metric("VPL do Fluxo de Caixa", format_currency(sum(fluxo_caixa)))
-        
-        # Verificações de sanidade
-        if relacao_parcela_credito > 100:
-            st.warning("Atenção: A relação Parcela/Crédito Novo está acima de 100%.")
-        if parcela > credito_novo / 10:
-            st.warning("Atenção: O valor da parcela parece estar muito alto em relação ao crédito novo.")
-        
-        # Gráficos
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
-        
-        # Gráfico de amortização
-        meses = list(range(1, prazo_meses + 1))
-        saldos = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in meses]
-        ax1.plot(meses, saldos)
-        ax1.set_title("Amortização do Saldo Devedor")
-        ax1.set_xlabel("Meses")
-        ax1.set_ylabel("Saldo Devedor (R$)")
-        ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
-        
-        # Gráfico de fluxo de caixa
-        ax2.bar(range(1, prazo_empreendimento + 1), fluxo_caixa)
-        ax2.set_title("Fluxo de Caixa do Empreendimento")
-        ax2.set_xlabel("Meses")
-        ax2.set_ylabel("Valor (R$)")
-        ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
-        
-        st.pyplot(fig)
-        
-        # Tabela de fluxo de caixa
-        df_fluxo = pd.DataFrame({
-            'Mês': range(1, prazo_empreendimento + 1),
-            'Fluxo de Caixa': [format_currency(fc) for fc in fluxo_caixa]
-        })
-        st.write(df_fluxo)
+        if valor_lance >= valor_credito:
+            st.error("O valor do lance não pode ser maior ou igual ao valor do crédito.")
+        else:
+            parcela = calcular_parcela(valor_credito, prazo_meses, taxa_admin_anual, indice_correcao_anual)
+            credito_novo = valor_credito - valor_lance
+            relacao_parcela_credito = (parcela / credito_novo) * Decimal('100')
+            
+            fluxo_caixa = calcular_fluxo_caixa(vgv, orcamento, prazo_empreendimento, perfil_vendas, perfil_despesas)
+            vpl = calcular_vpl(fluxo_caixa, taxa_desconto_vpl)
+            
+            # Exibição de resultados principais
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Parcela Mensal", format_currency(parcela))
+            with col2:
+                st.metric("Relação Parcela/Crédito Novo", f"{relacao_parcela_credito:.2f}%")
+            with col3:
+                st.metric("VPL do Fluxo de Caixa", format_currency(vpl))
+            
+            # Verificações de sanidade
+            if relacao_parcela_credito > 100:
+                st.warning("Atenção: A relação Parcela/Crédito Novo está acima de 100%.")
+            if parcela > credito_novo / 10:
+                st.warning("Atenção: O valor da parcela parece estar muito alto em relação ao crédito novo.")
+            
+            # Gráficos
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
+            
+            # Gráfico de amortização
+            meses = list(range(1, prazo_meses + 1))
+            saldos = [calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_correcao_anual, m) for m in meses]
+            ax1.plot(meses, saldos)
+            ax1.set_title("Amortização do Saldo Devedor")
+            ax1.set_xlabel("Meses")
+            ax1.set_ylabel("Saldo Devedor (R$)")
+            ax1.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
+            
+            # Gráfico de fluxo de caixa
+            ax2.bar(range(1, prazo_empreendimento + 1), fluxo_caixa)
+            ax2.set_title("Fluxo de Caixa do Empreendimento")
+            ax2.set_xlabel("Meses")
+            ax2.set_ylabel("Valor (R$)")
+            ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: format_currency(x)))
+            
+            st.pyplot(fig)
+            
+            # Tabela de fluxo de caixa
+            df_fluxo = pd.DataFrame({
+                'Mês': range(1, prazo_empreendimento + 1),
+                'Fluxo de Caixa': [format_currency(fc) for fc in fluxo_caixa]
+            })
+            st.write(df_fluxo)
+
     except Exception as e:
         st.error(f"Ocorreu um erro nos cálculos: {str(e)}")
 
@@ -206,4 +215,4 @@ if st.button("Recalcular com Dropdowns"):
     except Exception as e:
         st.error(f"Ocorreu um erro no recálculo com dropdowns: {str(e)}")
 
-st.sidebar.info("Constructa MVP - Versão 1.0.5")
+st.sidebar.info("Constructa MVP - Versão 1.0.6")
