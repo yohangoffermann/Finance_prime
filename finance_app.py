@@ -235,6 +235,11 @@ if 'ct' in st.session_state:
     with col3:
         prazo_valido = st.session_state.prazo_meses >= 180
         st.write(f"Prazo ≥ 180 meses: {'' if prazo_valido else ''}")
+# Adicione isso à seção de validações
+with col4:
+    relacao_parcela_cl = (parcela_padrao / cl * 100).quantize(Decimal('0.01'))
+    relacao_aceitavel = relacao_parcela_cl <= Decimal('0.7')
+    st.write(f"Relação Parcela/Crédito Liberado ≤ 0.7%: {'' if relacao_aceitavel else ''}")
 
 # Validações
     st.subheader("Validações do Modelo")
@@ -251,6 +256,10 @@ if 'ct' in st.session_state:
     with col3:
         prazo_valido = st.session_state.prazo_meses >= 180
         st.write(f"Prazo ≥ 180 meses: {'' if prazo_valido else ''}")
+    with col4:
+        relacao_parcela_cl = (parcela_padrao / cl * 100).quantize(Decimal('0.01'))
+        relacao_aceitavel = relacao_parcela_cl <= Decimal('0.7')
+        st.write(f"Relação Parcela/Crédito Liberado ≤ 0.7%: {'' if relacao_aceitavel else ''}")
 
 # Seção de Dropdowns
 st.subheader("Simulação de Dropdowns")
