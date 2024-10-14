@@ -41,7 +41,7 @@ def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_corr
     saldo = valor_credito
     for mes in range(1, meses_pagos + 1):
         if mes % 12 == 1 and mes > 12:  # Aplica correção no início de cada ano, a partir do segundo ano
-            saldo *= (1 + indice_correcao_anual)
+            saldo *= (Decimal('1') + indice_correcao_anual)
         
         amortizacao = parcela - (saldo * taxa_admin_mensal)
         saldo -= amortizacao
@@ -49,7 +49,7 @@ def calcular_saldo_devedor(valor_credito, parcela, taxa_admin_anual, indice_corr
     return max(saldo, Decimal('0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 def aplicar_dropdown(saldo_devedor, valor_dropdown, agio):
-    valor_efetivo = valor_dropdown * (1 + Decimal(str(agio)) / Decimal('100'))
+    valor_efetivo = valor_dropdown * (Decimal('1') + Decimal(str(agio)) / Decimal('100'))
     return max(saldo_devedor - valor_efetivo, Decimal('0'))
 
 # Função para atualizar o gráfico e métricas
@@ -57,10 +57,10 @@ def update_simulation():
     valor_credito = parse_currency(st.session_state.valor_credito)
     valor_lance = parse_currency(st.session_state.valor_lance)
     prazo_meses = st.session_state.prazo_meses
-    taxa_admin_anual = st.session_state.taxa_admin_anual
-    indice_correcao_anual = st.session_state.indice_correcao_anual
+    taxa_admin_anual = Decimal(str(st.session_state.taxa_admin_anual))
+    indice_correcao_anual = Decimal(str(st.session_state.indice_correcao_anual))
     valor_dropdown = parse_currency(st.session_state.valor_dropdown)
-    agio = st.session_state.agio
+    agio = Decimal(str(st.session_state.agio))
     mes_dropdown = st.session_state.mes_dropdown
 
     parcela_inicial = calcular_parcela(valor_credito - valor_lance, prazo_meses, taxa_admin_anual)
@@ -170,6 +170,6 @@ if all(key in st.session_state for key in ['saldo_atual', 'parcela_atualizada', 
     st.write(f"Valor do Lance: {st.session_state.valor_lance}")
     st.write(f"Crédito Efetivo: {format_currency(parse_currency(st.session_state.valor_credito) - parse_currency(st.session_state.valor_lance))}")
     st.write(f"Valor do Dropdown: {st.session_state.valor_dropdown}")
-    st.write(f"Valor Efetivo do Dropdown (com ágio): {format_currency(parse_currency(st.session_state.valor_dropdown) * (1 + st.session_state.agio/100))}")
+    st.write(f"Valor Efetivo do Dropdown (com ágio): {format_currency(parse_currency(st.session_state.valor_dropdown) * (Decimal('1') + Decimal(str(st.session_state.agio))/Decimal('100')))}")
 
 st.sidebar.info("Constructa - Módulo de Consórcio v1.3")
