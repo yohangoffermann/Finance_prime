@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
-def calculate_balance(principal, months, rate, dropdowns):
+def calculate_balance(principal, months, rate, dropdowns, agio):
     balance = principal
     balance_no_drops = principal
     monthly_payment = (principal * (rate/12) * (1 + rate/12)**months) / ((1 + rate/12)**months - 1)
@@ -16,7 +16,9 @@ def calculate_balance(principal, months, rate, dropdowns):
         balance_no_drops = balance_no_drops - monthly_payment + (balance_no_drops * (rate/12))
         
         if month in dropdowns:
-            balance -= dropdowns[month]
+            dropdown_value = dropdowns[month]
+            dropdown_impact = dropdown_value * (1 + agio/100)
+            balance -= dropdown_impact
         
         balances.append(balance)
         balances_no_drops.append(balance_no_drops)
@@ -30,6 +32,7 @@ def main():
     principal = st.sidebar.number_input("Valor do Crédito", min_value=10000, value=100000, step=10000)
     months = st.sidebar.number_input("Prazo (meses)", min_value=12, value=200, step=12)
     rate = st.sidebar.number_input("Taxa de Juros Anual (%)", min_value=0.1, value=6.0, step=0.1) / 100
+    agio = st.sidebar.number_input("Ágio dos Dropdowns (%)", min_value=0.0, value=20.0, step=1.0)
 
     # Dropdown inputs
     st.sidebar.subheader("Adicionar Dropdowns")
@@ -48,7 +51,7 @@ def main():
 
     # Calculate balances
     dropdowns = st.session_state.dropdowns if 'dropdowns' in st.session_state else {}
-    balances, balances_no_drops, monthly_payment = calculate_balance(principal, months, rate, dropdowns)
+    balances, balances_no_drops, monthly_payment = calculate_balance(principal, months, rate, dropdowns, agio)
 
     # Plot
     fig = go.Figure()
@@ -77,6 +80,15 @@ def main():
             st.write(f"Redução: R$ {monthly_payment - adjusted_payment:,.2f}")
         else:
             st.write("Sem alteração (nenhum dropdown aplicado)")
+
+    # Total impact of dropdowns
+    if len(dropdowns) > 0:
+        total_dropdown_value = sum(dropdowns.values())
+        total_dropdown_impact = total_dropdown_value * (1 + agio/100)
+        st.subheader("Impacto Total dos Dropdowns")
+        st.write(f"Valor Total dos Dropdowns: R$ {total_dropdown_value:,.2f}")
+        st.write(f"Impacto Total (com ágio): R$ {total_dropdown_impact:,.2f}")
+        st.write(f"Ganho com Ágio: R$ {total_dropdown_impact - total_dropdown_value:,.2f}")
 
 if __name__ == "__main__":
     main()
