@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
+from datetime import date, timedelta
 
 def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     balance = principal
@@ -9,20 +10,29 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     monthly_payment = (principal / months) + (principal * admin_fee)
     balances = []
     balances_no_drops = []
-    
+    total_paid = 0
+    total_drops = 0
+    quitacao_month = months
+
     for month in range(1, months+1):
-        balance = balance - monthly_payment
-        balance_no_drops = balance_no_drops - monthly_payment
+        total_paid += monthly_payment
+        if balance > 0:
+            balance = max(0, balance - monthly_payment)
+            balance_no_drops = max(0, balance_no_drops - monthly_payment)
         
         if month in dropdowns:
             dropdown_value = dropdowns[month]
             dropdown_impact = dropdown_value * (1 + agio/100)
             balance = max(0, balance - dropdown_impact)
+            total_drops += dropdown_value
         
-        balances.append(max(0, balance))
+        if balance == 0 and quitacao_month == months:
+            quitacao_month = month
+
+        balances.append(balance)
         balances_no_drops.append(balance_no_drops)
     
-    return balances, balances_no_drops, monthly_payment
+    return balances, balances_no_drops, monthly_payment, total_paid, total_drops, quitacao_month
 
 def main():
     st.title("Simulador Constructa com Dropdowns")
@@ -55,13 +65,19 @@ def main():
             st.sidebar.write(f"Mês {month}: R$ {amount}")
 
     # Calculate balances
-    balances, balances_no_drops, monthly_payment = calculate_balance(principal, months, admin_fee, st.session_state.dropdowns, agio)
+    balances, balances_no_drops, monthly_payment, total_paid, total_drops, quitacao_month = calculate_balance(principal, months, admin_fee, st.session_state.dropdowns, agio)
 
     # Plot
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(range(1, months+1)), y=balances, mode='lines', name='Com Dropdowns'))
     fig.add_trace(go.Scatter(x=list(range(1, months+1)), y=balances_no_drops, mode='lines', name='Sem Dropdowns'))
     fig.update_layout(title='Evolução do Saldo Devedor', xaxis_title='Meses', yaxis_title='Saldo (R$)')
+    fig.add_annotation(
+        text="Ambas as curvas param em zero quando o saldo é quitado",
+        xref="paper", yref="paper",
+        x=0.5, y=-0.15,
+        showarrow=False
+    )
     st.plotly_chart(fig)
 
     # Monitors
@@ -85,6 +101,18 @@ def main():
         else:
             st.write("Sem alteração (nenhum dropdown aplicado)")
 
+    # Análise de Quitação Antecipada
+    if quitacao_month < months:
+        st.subheader("Análise de Quitação Antecipada")
+        valor_captado = total_paid + total_drops
+        valor_quitacao = principal - sum(st.session_state.dropdowns.values())
+        economia = valor_captado - valor_quitacao
+        st.write(f"Mês de Quitação: {quitacao_month}")
+        st.write(f"Valor Total Captado: R$ {valor_captado:,.2f}")
+        st.write(f"Valor Usado para Quitar: R$ {valor_quitacao:,.2f}")
+        st.write(f"Economia Real: R$ {economia:,.2f}")
+        st.write(f"Percentual de Economia: {(economia/principal)*100:.2f}%")
+
     # Total impact of dropdowns
     if st.session_state.dropdowns:
         total_dropdown_value = sum(st.session_state.dropdowns.values())
@@ -93,6 +121,51 @@ def main():
         st.write(f"Valor Total dos Dropdowns: R$ {total_dropdown_value:,.2f}")
         st.write(f"Impacto Total (com ágio): R$ {total_dropdown_impact:,.2f}")
         st.write(f"Ganho com Ágio: R$ {total_dropdown_impact - total_dropdown_value:,.2f}")
+
+    # Simulador de Datas
+    st.subheader("Simulador de Datas")
+    start_date = st.date_input("Data de Início do Consórcio", date.today())
+    
+    end_date_no_drops = start_date + timedelta(days=30*months)
+    end_date_with_drops = start_date + timedelta(days=30*quitacao_month)
+    
+    st.write(f"Data de Término sem Dropdowns: {end_date_no_drops.strftime('%d/%m/%Y')}")
+    st.write(f"Data de Término com Dropdowns: {end_date_with_drops.strftime('%d/%m/%Y')}")
+    
+    if quitacao_month < months:
+        dias_economizados = (end_date_no_drops - end_date_with_drops).days
+        st.write(f"Você economizou {dias_economizados} dias com os dropdowns!")
+        
+        # Calculadora de Oportunidades para Incorporadores
+        st.subheader("Oportunidades de Reinvestimento")
+        valor_economizado = economia
+        st.write(f"Com a economia de R$ {valor_economizado:,.2f}, você poderia:")
+        
+        # 1. Aquisição de Terreno
+        metro_quadrado_medio = 1000  # Valor médio do m² para exemplo
+        area_terreno = valor_economizado / metro_quadrado_medio
+        st.write(f"1. Adquirir um terreno adicional de aproximadamente {area_terreno:.2f} m²")
+        
+        # 2. Melhorias no Empreendimento Atual
+        st.write(f"2. Investir em melhorias no empreendimento atual:")
+        st.write(f"   - Upgrade de acabamentos: R$ {valor_economizado * 0.4:,.2f}")
+        st.write(f"   - Áreas de lazer adicionais: R$ {valor_economizado * 0.3:,.2f}")
+        st.write(f"   - Tecnologias sustentáveis: R$ {valor_economizado * 0.3:,.2f}")
+        
+        # 3. Marketing e Vendas
+        campanhas_marketing = valor_economizado * 0.2
+        st.write(f"3. Investir R$ {campanhas_marketing:,.2f} em campanhas de marketing, potencialmente acelerando vendas")
+        
+        # 4. Fundo para Novo Projeto
+        novo_projeto = valor_economizado * 0.7
+        st.write(f"4. Iniciar um fundo de R$ {novo_projeto:,.2f} para um novo projeto de incorporação")
+        
+        # 5. Análise de Retorno
+        retorno_estimado = valor_economizado * 1.15
+        st.write(f"5. Se reinvestido no próximo projeto, esse valor pode gerar um retorno estimado de R$ {retorno_estimado:,.2f} (considerando 15% de retorno)")
+
+        # 6. Antecipação de Cronograma
+        st.write(f"6. Antecipar o cronograma de obras em {dias_economizados} dias, potencialmente lançando o próximo projeto mais cedo")
 
 if __name__ == "__main__":
     main()
