@@ -63,30 +63,36 @@ def main():
     if 'dropdowns' not in st.session_state:
         st.session_state.dropdowns = {}
 
+    # Cálculos iniciais
+    balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain = calculate_balance(
+        principal, months, admin_fee, st.session_state.dropdowns, agio
+    )
+
+    # Mostrar saldo devedor atual
+    current_balance = balances[-1]
+    st.subheader(f"Saldo Devedor Atual: R$ {current_balance:,.2f}")
+
     st.subheader("Adicionar Dropdown")
     col1, col2, col3 = st.columns(3)
     with col1:
         dropdown_month = st.number_input("Mês do Dropdown", min_value=1, max_value=months, value=12)
     with col2:
-        dropdown_amount = st.number_input("Valor do Dropdown (R$)", min_value=1000, value=10000, step=1000)
+        max_dropdown = current_balance if dropdown_month > len(balances) - 1 else balances[dropdown_month]
+        dropdown_amount = st.number_input("Valor do Dropdown (R$)", min_value=0, max_value=float(max_dropdown), value=min(10000, float(max_dropdown)), step=1000)
     with col3:
         if st.button("Adicionar Dropdown"):
             st.session_state.dropdowns[dropdown_month] = dropdown_amount
+            st.experimental_rerun()
 
     # Exibir Dropdowns adicionados
     if st.session_state.dropdowns:
         st.subheader("Dropdowns Adicionados")
-        for month, amount in st.session_state.dropdowns.items():
+        for month, amount in sorted(st.session_state.dropdowns.items()):
             col1, col2 = st.columns([3, 1])
             col1.write(f"Mês {month}: R$ {amount:,.2f}")
             if col2.button("Remover", key=f"remove_{month}"):
                 del st.session_state.dropdowns[month]
                 st.experimental_rerun()
-
-    # Cálculos
-    balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain = calculate_balance(
-        principal, months, admin_fee, st.session_state.dropdowns, agio
-    )
 
     # Gráfico de Saldo Devedor
     fig = go.Figure()
