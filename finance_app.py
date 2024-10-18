@@ -34,6 +34,7 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
             remaining_months = months - month
             if remaining_months > 0:
                 amortization = balance / remaining_months
+                monthly_payment = amortization + (balance * admin_fee)
         
         balance = max(0, balance)
         balance_no_drops = max(0, balance_no_drops)
@@ -42,6 +43,13 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
         balances_no_drops.append(balance_no_drops)
         monthly_payments.append(monthly_payment)
         monthly_payments_no_drops.append(monthly_payment_no_drops)
+
+        # Debug print
+        if month in dropdowns:
+            print(f"Mês {month} (após dropdown):")
+            print(f"  Saldo: {balance:.2f}")
+            print(f"  Amortização: {amortization:.2f}")
+            print(f"  Parcela: {monthly_payment:.2f}")
 
     agio_gain = total_dropdown_impact - total_dropdown_value
     return balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain
