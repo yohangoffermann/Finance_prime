@@ -2,10 +2,27 @@ import streamlit as st
 import plotly.graph_objects as go
 from datetime import date, timedelta
 
+# Configuração da página
+st.set_page_config(page_title="Simulador Constructa", layout="wide")
+
+# Estilo CSS personalizado
+st.markdown("""
+<style>
+    .main {background-color: #f0f2f6;}
+    .stButton>button {background-color: #1e3799; color: white;}
+    .stTextInput>div>div>input {color: #2c3e50;}
+    .stSelectbox>div>div>select {color: #2c3e50;}
+    .stNumberInput>div>div>input {color: #2c3e50;}
+    h1 {color: #1e3799;}
+    h2 {color: #34495e;}
+    h3 {color: #2980b9;}
+</style>
+""", unsafe_allow_html=True)
+
 def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     balance = principal
     balance_no_drops = principal
-    monthly_payment = (principal / months) + (principal * admin_fee)
+    amortization = principal / months
     balances = [principal]
     balances_no_drops = [principal]
     total_paid = 0
@@ -13,9 +30,13 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     quitacao_month = months
 
     for month in range(1, months + 1):
+        admin_fee_value = balance * admin_fee
+        monthly_payment = amortization + admin_fee_value
+        
+        balance -= amortization
+        balance_no_drops -= amortization
+        
         total_paid += monthly_payment
-        balance -= monthly_payment
-        balance_no_drops -= monthly_payment
         
         if month in dropdowns:
             dropdown_value = dropdowns[month]
@@ -53,7 +74,7 @@ def main():
         dropdown_month = st.number_input("Mês do Dropdown", min_value=1, max_value=months, value=12)
         dropdown_amount = st.number_input("Valor do Dropdown (R$)", min_value=1000, value=10000, step=1000)
         if st.button("Adicionar Dropdown", key="add_dropdown"):
-            current_balance = principal - (dropdown_month * ((principal / months) + (principal * admin_fee)))
+            current_balance = principal - (dropdown_month * (principal / months))
             if dropdown_amount <= current_balance:
                 st.session_state.dropdowns[dropdown_month] = dropdown_amount
             else:
@@ -71,6 +92,49 @@ def main():
     with col2:
         balances, balances_no_drops, monthly_payment, total_paid, total_drops, quitacao_month = calculate_balance(principal, months, admin_fee, st.session_state.dropdowns, agio)
 
+        col_saldo, col_parcela = st.columns(2)
+
+        with col_saldo:
+            st.subheader("Saldo Devedor Final")
+            saldo_com_drops = balances[-1]
+            saldo_sem_drops = balances_no_drops[-1]
+            economia = saldo_sem_drops - saldo_com_drops
+            
+            st.metric(
+                label="Com Dropdowns",
+                value=f"R$ {saldo_com_drops:,.2f}",
+                delta=f"-R$ {economia:,.2f}",
+                delta_color="inverse"
+            )
+            st.metric(
+                label="Sem Dropdowns",
+                value=f"R$ {saldo_sem_drops:,.2f}"
+            )
+
+        with col_parcela:
+            st.subheader("Parcela Mensal")
+            parcela_inicial = monthly_payment
+            if st.session_state.dropdowns:
+                last_dropdown_month = max(st.session_state.dropdowns.keys())
+                adjusted_balance = balances[last_dropdown_month]
+                adjusted_months = months - last_dropdown_month
+                parcela_final = (adjusted_balance / adjusted_months) + (adjusted_balance * admin_fee)
+                reducao = parcela_inicial - parcela_final
+                
+                st.metric(
+                    label="Parcela Final",
+                    value=f"R$ {parcela_final:,.2f}",
+                    delta=f"-R$ {reducao:,.2f}",
+                    delta_color="inverse"
+                )
+            else:
+                parcela_final = parcela_inicial
+            
+            st.metric(
+                label="Parcela Inicial",
+                value=f"R$ {parcela_inicial:,.2f}"
+            )
+
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=list(range(months + 1)), y=balances_no_drops, mode='lines', name='Sem Dropdowns', line=dict(color='#e74c3c', dash='dash')))
         fig.add_trace(go.Scatter(x=list(range(months + 1)), y=balances, mode='lines', name='Com Dropdowns', line=dict(color='#1e3799')))
@@ -83,27 +147,6 @@ def main():
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("Análise Financeira")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("Saldo Devedor Final")
-            st.write(f"Com Dropdowns: R$ {balances[-1]:,.2f}")
-            st.write(f"Sem Dropdowns: R$ {balances_no_drops[-1]:,.2f}")
-            st.write(f"Economia: R$ {balances_no_drops[-1] - balances[-1]:,.2f}")
-
-        with col2:
-            st.write("Parcela Mensal")
-            st.write(f"Inicial: R$ {monthly_payment:,.2f}")
-            if st.session_state.dropdowns:
-                last_dropdown_month = max(st.session_state.dropdowns.keys())
-                adjusted_balance = balances[last_dropdown_month]
-                adjusted_months = months - last_dropdown_month
-                adjusted_payment = (adjusted_balance / adjusted_months) + (adjusted_balance * admin_fee)
-                st.write(f"Após Último Dropdown: R$ {adjusted_payment:,.2f}")
-                st.write(f"Redução: R$ {monthly_payment - adjusted_payment:,.2f}")
-            else:
-                st.write("Sem alteração (nenhum dropdown aplicado)")
-
         if quitacao_month < months:
             st.subheader("Análise de Quitação Antecipada")
             valor_captado = total_paid + total_drops
@@ -115,7 +158,42 @@ def main():
             st.write(f"Economia Real: R$ {economia:,.2f}")
             st.write(f"Percentual de Economia: {(economia/principal)*100:.2f}%")
 
-        # ... [resto do código permanece o mesmo]
+        st.subheader("Simulador de Datas")
+        start_date = st.date_input("Data de Início do Consórcio", date.today())
+        
+        end_date_no_drops = start_date + timedelta(days=30*months)
+        end_date_with_drops = start_date + timedelta(days=30*quitacao_month)
+        
+        st.write(f"Data de Término sem Dropdowns: {end_date_no_drops.strftime('%d/%m/%Y')}")
+        st.write(f"Data de Término com Dropdowns: {end_date_with_drops.strftime('%d/%m/%Y')}")
+        
+        if quitacao_month < months:
+            dias_economizados = (end_date_no_drops - end_date_with_drops).days
+            st.write(f"Dias economizados: {dias_economizados}")
+            
+            st.subheader("Oportunidades de Reinvestimento")
+            valor_economizado = economia
+            st.write(f"Com a economia de R$ {valor_economizado:,.2f}, você poderia:")
+            
+            metro_quadrado_medio = 1000
+            area_terreno = valor_economizado / metro_quadrado_medio
+            st.write(f"1. Adquirir um terreno adicional de aproximadamente {area_terreno:.2f} m²")
+            
+            st.write(f"2. Investir em melhorias no empreendimento atual:")
+            st.write(f"   - Upgrade de acabamentos: R$ {valor_economizado * 0.4:,.2f}")
+            st.write(f"   - Áreas de lazer adicionais: R$ {valor_economizado * 0.3:,.2f}")
+            st.write(f"   - Tecnologias sustentáveis: R$ {valor_economizado * 0.3:,.2f}")
+            
+            campanhas_marketing = valor_economizado * 0.2
+            st.write(f"3. Investir R$ {campanhas_marketing:,.2f} em campanhas de marketing")
+            
+            novo_projeto = valor_economizado * 0.7
+            st.write(f"4. Iniciar um fundo de R$ {novo_projeto:,.2f} para um novo projeto")
+            
+            retorno_estimado = valor_economizado * 1.15
+            st.write(f"5. Potencial retorno estimado de R$ {retorno_estimado:,.2f} se reinvestido (15% a.a.)")
+
+            st.write(f"6. Antecipar o cronograma de obras em {dias_economizados} dias")
 
 if __name__ == "__main__":
     main()
