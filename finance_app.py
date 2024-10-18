@@ -68,47 +68,24 @@ def main():
 
     # Resumo Financeiro
     st.subheader("Resumo Financeiro")
-    last_month = months
+    last_dropdown_month = max(st.session_state.dropdowns.keys()) if st.session_state.dropdowns else months
 
     col1, col2 = st.columns(2)
     with col1:
-        st.write("Saldo Devedor")
-        st.metric("Inicial", f"R$ {principal:,.2f}")
-        st.metric("Final", f"R$ {balances[-1]:,.2f}")
+        st.write(f"Saldo Devedor (no mês {last_dropdown_month})")
+        saldo_com_drops = balances[last_dropdown_month]
+        saldo_sem_drops = balances_no_drops[last_dropdown_month]
+        reducao_saldo = saldo_sem_drops - saldo_com_drops
+        st.metric("Com Dropdowns", f"R$ {saldo_com_drops:,.2f}", delta=f"-R$ {reducao_saldo:,.2f}", delta_color="inverse")
+        st.metric("Sem Dropdowns", f"R$ {saldo_sem_drops:,.2f}")
 
     with col2:
-        st.write("Parcela Mensal")
-        st.metric("Inicial", f"R$ {monthly_payments[0]:,.2f}")
-        st.metric("Final", f"R$ {monthly_payments[-1]:,.2f}")
-
-    total_pago = sum(monthly_payments)
-    cet = (total_pago / principal - 1) * 100
-
-    st.subheader("Análise Financeira")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Pago", f"R$ {total_pago:,.2f}")
-    with col2:
-        st.metric("Custo Efetivo Total (CET)", f"{cet:.2f}%")
-    with col3:
-        st.metric("Prazo Total", f"{months} meses")
-
-    if st.session_state.dropdowns:
-        amortizacao = total_dropdown_value
-        ganho_agio = agio_gain
-        economia_parcelas = sum(monthly_payments_no_drops) - sum(monthly_payments)
-        economia_real = economia_parcelas - ganho_agio
-
-        st.subheader("Impacto dos Dropdowns")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Amortização Antecipada", f"R$ {amortizacao:,.2f}")
-        with col2:
-            st.metric("Ganho com Ágio", f"R$ {ganho_agio:,.2f}")
-        with col3:
-            st.metric("Economia Real", f"R$ {economia_real:,.2f}")
-
-        st.write(f"Impacto Total: R$ {amortizacao + ganho_agio + economia_real:,.2f}")
+        st.write(f"Parcela Mensal (no mês {last_dropdown_month})")
+        parcela_com_drops = monthly_payments[last_dropdown_month-1]
+        parcela_sem_drops = monthly_payments_no_drops[last_dropdown_month-1]
+        reducao_parcela = parcela_sem_drops - parcela_com_drops
+        st.metric("Com Dropdowns", f"R$ {parcela_com_drops:,.2f}", delta=f"-R$ {reducao_parcela:,.2f}", delta_color="inverse")
+        st.metric("Sem Dropdowns", f"R$ {parcela_sem_drops:,.2f}")
 
     # Adicionar Dropdown
     st.subheader("Adicionar Dropdown")
@@ -140,35 +117,40 @@ def main():
     fig.update_layout(title='Evolução do Saldo Devedor', xaxis_title='Meses', yaxis_title='Saldo (R$)')
     st.plotly_chart(fig, use_container_width=True)
 
+    # Análise de Arbitragem Financeira
+    st.subheader("Análise de Arbitragem Financeira")
+    valor_captado = principal
+    valor_quitacao = sum(monthly_payments[:last_dropdown_month]) + sum(st.session_state.dropdowns.values())
+    ganho_arbitragem = valor_captado - valor_quitacao
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Valor Captado", f"R$ {valor_captado:,.2f}")
+    with col2:
+        st.metric("Valor Usado para Quitar", f"R$ {valor_quitacao:,.2f}")
+    with col3:
+        st.metric("Ganho na Arbitragem", f"R$ {ganho_arbitragem:,.2f}")
+
+    # Cálculo do ROI
+    if st.session_state.dropdowns:
+        investimento_drops = sum(st.session_state.dropdowns.values())
+        roi = (ganho_arbitragem / investimento_drops - 1) * 100
+        st.metric("ROI da Estratégia", f"{roi:.2f}%")
+
+    # Tempo para recuperar o investimento em dropdowns
+    if ganho_arbitragem > 0:
+        tempo_recuperacao = investimento_drops / (ganho_arbitragem / last_dropdown_month)
+        st.write(f"Tempo estimado para recuperar o investimento em dropdowns: {tempo_recuperacao:.1f} meses")
+
+    st.write(f"Esta estratégia permite captar R$ {valor_captado:,.2f} e quitar por R$ {valor_quitacao:,.2f}, " 
+             f"resultando em um ganho de R$ {ganho_arbitragem:,.2f}.")
+
     # Simulador de Datas
     st.subheader("Simulador de Datas")
     start_date = st.date_input("Data de Início do Consórcio", date.today())
     end_date = start_date + timedelta(days=30*months)
     
     st.metric("Data de Término", end_date.strftime('%d/%m/%Y'))
-
-    # Oportunidades de Reinvestimento
-    if st.session_state.dropdowns:
-        st.subheader("Oportunidades de Reinvestimento")
-        st.write(f"Com a economia de R$ {economia_real:,.2f}, você poderia:")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            metro_quadrado_medio = 5000
-            area_terreno = economia_real / metro_quadrado_medio
-            st.info(f"1. Adquirir um terreno adicional de aproximadamente {area_terreno:.2f} m²")
-            st.success(f"2. Investir em melhorias no empreendimento atual:")
-            st.write(f"   - Upgrade de acabamentos: R$ {economia_real * 0.4:,.2f}")
-            st.write(f"   - Áreas de lazer adicionais: R$ {economia_real * 0.3:,.2f}")
-            st.write(f"   - Tecnologias sustentáveis: R$ {economia_real * 0.3:,.2f}")
-        
-        with col2:
-            campanhas_marketing = economia_real * 0.2
-            st.info(f"3. Investir R$ {campanhas_marketing:,.2f} em campanhas de marketing")
-            novo_projeto = economia_real * 0.7
-            st.success(f"4. Iniciar um fundo de R$ {novo_projeto:,.2f} para um novo projeto")
-            retorno_estimado = economia_real * 1.15
-            st.warning(f"5. Potencial retorno estimado de R$ {retorno_estimado:,.2f} se reinvestido (15% a.a.)")
 
 if __name__ == "__main__":
     main()
