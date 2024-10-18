@@ -28,6 +28,7 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     total_paid = 0
     total_drops = 0
     quitacao_month = months
+    monthly_payments = []
 
     for month in range(1, months + 1):
         admin_fee_value = balance * admin_fee
@@ -43,17 +44,23 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
             dropdown_impact = dropdown_value * (1 + agio/100)
             balance -= dropdown_impact
             total_drops += dropdown_value
+            
+            # Recalcular amortização após o dropdown
+            remaining_months = months - month
+            if remaining_months > 0:
+                amortization = balance / remaining_months
         
         balance = max(0, balance)
         balance_no_drops = max(0, balance_no_drops)
         
         balances.append(balance)
         balances_no_drops.append(balance_no_drops)
+        monthly_payments.append(monthly_payment)
         
         if balance == 0 and quitacao_month == months:
             quitacao_month = month
 
-    return balances, balances_no_drops, monthly_payment, total_paid, total_drops, quitacao_month
+    return balances, balances_no_drops, monthly_payments, total_paid, total_drops, quitacao_month
 
 def main():
     st.title("Simulador Constructa")
@@ -90,7 +97,7 @@ def main():
                     st.experimental_rerun()
 
     with col2:
-        balances, balances_no_drops, monthly_payment, total_paid, total_drops, quitacao_month = calculate_balance(principal, months, admin_fee, st.session_state.dropdowns, agio)
+        balances, balances_no_drops, monthly_payments, total_paid, total_drops, quitacao_month = calculate_balance(principal, months, admin_fee, st.session_state.dropdowns, agio)
 
         col_saldo, col_parcela = st.columns(2)
 
@@ -113,12 +120,10 @@ def main():
 
         with col_parcela:
             st.subheader("Parcela Mensal")
-            parcela_inicial = monthly_payment
+            parcela_inicial = monthly_payments[0]
             if st.session_state.dropdowns:
                 last_dropdown_month = max(st.session_state.dropdowns.keys())
-                adjusted_balance = balances[last_dropdown_month]
-                adjusted_months = months - last_dropdown_month
-                parcela_final = (adjusted_balance / adjusted_months) + (adjusted_balance * admin_fee)
+                parcela_final = monthly_payments[last_dropdown_month]
                 reducao = parcela_inicial - parcela_final
                 
                 st.metric(
@@ -146,6 +151,17 @@ def main():
             template="plotly_white"
         )
         st.plotly_chart(fig, use_container_width=True)
+
+        if st.checkbox("Mostrar Evolução das Parcelas"):
+            fig_parcelas = go.Figure()
+            fig_parcelas.add_trace(go.Scatter(x=list(range(1, months + 1)), y=monthly_payments, mode='lines', name='Parcelas', line=dict(color='#2ecc71')))
+            fig_parcelas.update_layout(
+                title='Evolução das Parcelas',
+                xaxis_title='Meses',
+                yaxis_title='Valor da Parcela (R$)',
+                template="plotly_white"
+            )
+            st.plotly_chart(fig_parcelas, use_container_width=True)
 
         if quitacao_month < months:
             st.subheader("Análise de Quitação Antecipada")
