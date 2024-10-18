@@ -1,12 +1,9 @@
 import streamlit as st
-import pandas as pd
 import plotly.graph_objects as go
-from datetime import date, timedelta
 
 # Configuração da página
 st.set_page_config(page_title="Simulador Constructa", layout="wide")
 
-# Função para calcular o saldo devedor e parcelas
 def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     balance = principal
     balance_no_drops = principal
@@ -33,7 +30,7 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
             total_dropdown_impact += dropdown_impact
             
             # Recalcular amortização após o dropdown
-            remaining_months = months - month
+            remaining_months = months - month + 1
             if remaining_months > 0:
                 amortization = balance / remaining_months
         
@@ -72,12 +69,13 @@ def main():
     current_balance = balances[-1]
     st.subheader(f"Saldo Devedor Atual: R$ {current_balance:,.2f}")
 
+    # Seção de Adicionar Dropdown
     st.subheader("Adicionar Dropdown")
     col1, col2, col3 = st.columns(3)
     with col1:
-        dropdown_month = st.number_input("Mês do Dropdown", min_value=1, max_value=months, value=12)
+        dropdown_month = st.number_input("Mês do Dropdown", min_value=1, max_value=months, value=min(12, months))
     with col2:
-        max_dropdown = current_balance if dropdown_month > len(balances) - 1 else balances[dropdown_month]
+        max_dropdown = balances[dropdown_month-1] if dropdown_month <= len(balances) else current_balance
         dropdown_amount = st.number_input("Valor do Dropdown (R$)", min_value=0, max_value=float(max_dropdown), value=min(10000, float(max_dropdown)), step=1000)
     with col3:
         if st.button("Adicionar Dropdown"):
