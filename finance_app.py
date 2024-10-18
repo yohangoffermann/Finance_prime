@@ -21,9 +21,6 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
         monthly_payment = amortization + admin_fee_value
         monthly_payment_no_drops = amortization + (balance_no_drops * admin_fee)
         
-        balance -= amortization
-        balance_no_drops -= amortization
-        
         if month in dropdowns:
             dropdown_value = dropdowns[month]
             dropdown_impact = dropdown_value * (1 + agio/100)
@@ -31,10 +28,14 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
             total_dropdown_value += dropdown_value
             total_dropdown_impact += dropdown_impact
             
-            remaining_months = months - month
-            if remaining_months > 0:
-                amortization = balance / remaining_months
-                monthly_payment = amortization + (balance * admin_fee)
+            # Recalcular amortização e parcela após dropdown
+            remaining_months = months - month + 1
+            amortization = balance / remaining_months
+            admin_fee_value = balance * admin_fee
+            monthly_payment = amortization + admin_fee_value
+        
+        balance -= amortization
+        balance_no_drops -= amortization
         
         balance = max(0, balance)
         balance_no_drops = max(0, balance_no_drops)
@@ -43,13 +44,6 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
         balances_no_drops.append(balance_no_drops)
         monthly_payments.append(monthly_payment)
         monthly_payments_no_drops.append(monthly_payment_no_drops)
-
-        # Debug print
-        if month in dropdowns:
-            print(f"Mês {month} (após dropdown):")
-            print(f"  Saldo: {balance:.2f}")
-            print(f"  Amortização: {amortization:.2f}")
-            print(f"  Parcela: {monthly_payment:.2f}")
 
     agio_gain = total_dropdown_impact - total_dropdown_value
     return balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain
@@ -60,10 +54,10 @@ def main():
     # Sidebar para inputs principais
     with st.sidebar:
         st.header("Configurações Principais")
-        principal = st.number_input("Valor do Crédito (R$)", min_value=10000, value=100000, step=10000)
-        months = st.number_input("Prazo (meses)", min_value=12, value=200, step=12)
-        admin_fee = st.number_input("Taxa de Administração Mensal (%)", min_value=0.1, value=0.5, step=0.1) / 100
-        agio = st.number_input("Ágio dos Dropdowns (%)", min_value=0.0, value=20.0, step=1.0)
+        principal = st.number_input("Valor do Crédito (R$)", min_value=10000, value=1800000, step=10000)
+        months = st.number_input("Prazo (meses)", min_value=12, value=210, step=12)
+        admin_fee = st.number_input("Taxa de Administração Mensal (%)", min_value=0.1, value=0.12, step=0.01) / 100
+        agio = st.number_input("Ágio dos Dropdowns (%)", min_value=0.0, value=25.0, step=1.0)
 
     # Inicialização dos dropdowns
     if 'dropdowns' not in st.session_state:
