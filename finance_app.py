@@ -15,6 +15,8 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     balances_no_drops = [principal]
     monthly_payments = []
     monthly_payments_no_drops = []
+    total_dropdown_value = 0
+    total_dropdown_impact = 0
 
     for month in range(1, months + 1):
         admin_fee_value = balance * admin_fee
@@ -27,6 +29,8 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
             dropdown_value = dropdowns[month]
             dropdown_impact = dropdown_value * (1 + agio/100)
             balance -= dropdown_impact
+            total_dropdown_value += dropdown_value
+            total_dropdown_impact += dropdown_impact
             
             # Recalcular amortização após o dropdown
             remaining_months = months - month
@@ -41,7 +45,8 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
         monthly_payments.append(monthly_payment)
         monthly_payments_no_drops.append(amortization + balance_no_drops * admin_fee)
 
-    return balances, balances_no_drops, monthly_payments, monthly_payments_no_drops
+    agio_gain = total_dropdown_impact - total_dropdown_value
+    return balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain
 
 def main():
     st.title("Simulador Constructa")
@@ -79,7 +84,7 @@ def main():
                 st.experimental_rerun()
 
     # Cálculos
-    balances, balances_no_drops, monthly_payments, monthly_payments_no_drops = calculate_balance(
+    balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain = calculate_balance(
         principal, months, admin_fee, st.session_state.dropdowns, agio
     )
 
@@ -92,7 +97,7 @@ def main():
 
     # Resumo Financeiro
     st.subheader("Resumo Financeiro")
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.write("Saldo Devedor Final")
         st.write(f"Com Dropdowns: R$ {balances[-1]:,.2f}")
@@ -103,6 +108,9 @@ def main():
         st.write(f"Inicial: R$ {monthly_payments[0]:,.2f}")
         st.write(f"Final (com Dropdowns): R$ {monthly_payments[-1]:,.2f}")
         st.write(f"Economia: R$ {monthly_payments[0] - monthly_payments[-1]:,.2f}")
+    with col3:
+        st.write("Ganho com Ágio")
+        st.write(f"Valor: R$ {agio_gain:,.2f}")
 
 if __name__ == "__main__":
     main()
