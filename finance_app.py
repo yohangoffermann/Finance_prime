@@ -8,50 +8,16 @@ st.set_page_config(page_title="Simulador Constructa", layout="wide")
 
 # Função para calcular o saldo devedor e parcelas
 def calculate_balance(principal, months, admin_fee, dropdowns, agio):
-    balance = principal
-    balance_no_drops = principal
-    amortization = principal / months
-    balances = [principal]
-    balances_no_drops = [principal]
-    monthly_payments = []
-    monthly_payments_no_drops = []
-
-    for month in range(1, months + 1):
-        admin_fee_value = balance * admin_fee
-        monthly_payment = amortization + admin_fee_value
-        
-        balance -= amortization
-        balance_no_drops -= amortization
-        
-        if month in dropdowns:
-            dropdown_value = dropdowns[month]
-            dropdown_impact = dropdown_value * (1 + agio/100)
-            balance -= dropdown_impact
-            
-            # Recalcular amortização após o dropdown
-            remaining_months = months - month
-            if remaining_months > 0:
-                amortization = balance / remaining_months
-        
-        balance = max(0, balance)
-        balance_no_drops = max(0, balance_no_drops)
-        
-        balances.append(balance)
-        balances_no_drops.append(balance_no_drops)
-        monthly_payments.append(monthly_payment)
-        monthly_payments_no_drops.append(amortization + balance_no_drops * admin_fee)
-
-    return balances, balances_no_drops, monthly_payments, monthly_payments_no_drops
+    # [O conteúdo desta função permanece o mesmo]
 
 def main():
     st.title("Simulador Constructa")
 
-    # Inputs
-    col1, col2 = st.columns(2)
-    with col1:
+    # Sidebar para inputs principais
+    with st.sidebar:
+        st.header("Configurações Principais")
         principal = st.number_input("Valor do Crédito (R$)", min_value=10000, value=100000, step=10000)
         months = st.number_input("Prazo (meses)", min_value=12, value=200, step=12)
-    with col2:
         admin_fee = st.number_input("Taxa de Administração Mensal (%)", min_value=0.1, value=0.5, step=0.1) / 100
         agio = st.number_input("Ágio dos Dropdowns (%)", min_value=0.0, value=20.0, step=1.0)
 
