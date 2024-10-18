@@ -101,46 +101,45 @@ def main():
 
         # Exibição dos valores de saldo devedor e parcelas
         st.subheader("Resumo Financeiro")
-        col_saldo, col_parcela = st.columns(2)
+        
+        # Saldo Devedor
+        st.write("Saldo Devedor Final")
+        saldo_com_drops = balances[-1]
+        saldo_sem_drops = balances_no_drops[-1]
+        economia = saldo_sem_drops - saldo_com_drops
+        
+        st.metric(
+            label="Com Dropdowns",
+            value=f"R$ {saldo_com_drops:,.2f}",
+            delta=f"-R$ {economia:,.2f}",
+            delta_color="inverse"
+        )
+        st.metric(
+            label="Sem Dropdowns",
+            value=f"R$ {saldo_sem_drops:,.2f}"
+        )
 
-        with col_saldo:
-            st.write("Saldo Devedor Final")
-            saldo_com_drops = balances[-1]
-            saldo_sem_drops = balances_no_drops[-1]
-            economia = saldo_sem_drops - saldo_com_drops
+        # Parcela Mensal
+        st.write("Parcela Mensal")
+        parcela_inicial = monthly_payments[0]
+        if st.session_state.dropdowns:
+            last_dropdown_month = max(st.session_state.dropdowns.keys())
+            parcela_final = monthly_payments[last_dropdown_month]
+            reducao = parcela_inicial - parcela_final
             
             st.metric(
                 label="Com Dropdowns",
-                value=f"R$ {saldo_com_drops:,.2f}",
-                delta=f"-R$ {economia:,.2f}",
+                value=f"R$ {parcela_final:,.2f}",
+                delta=f"-R$ {reducao:,.2f}",
                 delta_color="inverse"
             )
-            st.metric(
-                label="Sem Dropdowns",
-                value=f"R$ {saldo_sem_drops:,.2f}"
-            )
-
-        with col_parcela:
-            st.write("Parcela Mensal")
-            parcela_inicial = monthly_payments[0]
-            if st.session_state.dropdowns:
-                last_dropdown_month = max(st.session_state.dropdowns.keys())
-                parcela_final = monthly_payments[last_dropdown_month]
-                reducao = parcela_inicial - parcela_final
-                
-                st.metric(
-                    label="Com Dropdowns",
-                    value=f"R$ {parcela_final:,.2f}",
-                    delta=f"-R$ {reducao:,.2f}",
-                    delta_color="inverse"
-                )
-            else:
-                parcela_final = parcela_inicial
-            
-            st.metric(
-                label="Sem Dropdowns",
-                value=f"R$ {parcela_inicial:,.2f}"
-            )
+        else:
+            parcela_final = parcela_inicial
+        
+        st.metric(
+            label="Sem Dropdowns",
+            value=f"R$ {parcela_inicial:,.2f}"
+        )
 
         # Gráfico de Saldo Devedor
         fig = go.Figure()
