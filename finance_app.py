@@ -46,7 +46,7 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
         monthly_payments_no_drops.append(monthly_payment_no_drops)
 
     agio_gain = total_dropdown_impact - total_dropdown_value
-    return balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain
+    return balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain, total_dropdown_value
 
 def main():
     st.title("Simulador Constructa")
@@ -64,7 +64,7 @@ def main():
         st.session_state.dropdowns = {}
 
     # Cálculos
-    balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain = calculate_balance(
+    balances, balances_no_drops, monthly_payments, monthly_payments_no_drops, agio_gain, total_dropdown_value = calculate_balance(
         principal, months, admin_fee, st.session_state.dropdowns, agio
     )
 
@@ -77,20 +77,32 @@ def main():
         st.write(f"Saldo Devedor (no mês {last_dropdown_month})")
         saldo_com_drops = balances[last_dropdown_month]
         saldo_sem_drops = balances_no_drops[last_dropdown_month]
-        economia_saldo = saldo_sem_drops - saldo_com_drops
-        st.metric("Com Dropdowns", f"R$ {saldo_com_drops:,.2f}", delta=f"-R$ {economia_saldo:,.2f}", delta_color="inverse")
+        reducao_saldo = saldo_sem_drops - saldo_com_drops
+        st.metric("Com Dropdowns", f"R$ {saldo_com_drops:,.2f}", delta=f"-R$ {reducao_saldo:,.2f}", delta_color="inverse")
         st.metric("Sem Dropdowns", f"R$ {saldo_sem_drops:,.2f}")
 
     with col2:
         st.write(f"Parcela Mensal (no mês {last_dropdown_month})")
         parcela_com_drops = monthly_payments[last_dropdown_month-1]
         parcela_sem_drops = monthly_payments_no_drops[last_dropdown_month-1]
-        economia_parcela = parcela_sem_drops - parcela_com_drops
-        st.metric("Com Dropdowns", f"R$ {parcela_com_drops:,.2f}", delta=f"-R$ {economia_parcela:,.2f}", delta_color="inverse")
+        reducao_parcela = parcela_sem_drops - parcela_com_drops
+        st.metric("Com Dropdowns", f"R$ {parcela_com_drops:,.2f}", delta=f"-R$ {reducao_parcela:,.2f}", delta_color="inverse")
         st.metric("Sem Dropdowns", f"R$ {parcela_sem_drops:,.2f}")
 
-    economia_total = balances_no_drops[-1] - balances[-1]
-    st.metric("Economia Total Projetada", f"R$ {economia_total:,.2f}", delta=f"Inclui Ganho com Ágio: R$ {agio_gain:,.2f}", delta_color="off")
+    amortizacao = total_dropdown_value
+    ganho_agio = agio_gain
+    economia_real = reducao_saldo - (amortizacao + ganho_agio)
+
+    st.subheader("Análise do Impacto Financeiro")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Amortização Antecipada", f"R$ {amortizacao:,.2f}")
+    with col2:
+        st.metric("Ganho com Ágio", f"R$ {ganho_agio:,.2f}")
+    with col3:
+        st.metric("Economia Real", f"R$ {economia_real:,.2f}")
+
+    st.write(f"Impacto Total no Saldo Devedor: R$ {reducao_saldo:,.2f}")
 
     # Adicionar Dropdown
     st.subheader("Adicionar Dropdown")
@@ -134,24 +146,24 @@ def main():
 
     # Oportunidades de Reinvestimento
     st.subheader("Oportunidades de Reinvestimento")
-    st.write(f"Com a economia de R$ {economia_total:,.2f}, você poderia:")
+    st.write(f"Com a economia de R$ {economia_real:,.2f}, você poderia:")
     
     col1, col2 = st.columns(2)
     with col1:
         metro_quadrado_medio = 5000
-        area_terreno = economia_total / metro_quadrado_medio
+        area_terreno = economia_real / metro_quadrado_medio
         st.info(f"1. Adquirir um terreno adicional de aproximadamente {area_terreno:.2f} m²")
         st.success(f"2. Investir em melhorias no empreendimento atual:")
-        st.write(f"   - Upgrade de acabamentos: R$ {economia_total * 0.4:,.2f}")
-        st.write(f"   - Áreas de lazer adicionais: R$ {economia_total * 0.3:,.2f}")
-        st.write(f"   - Tecnologias sustentáveis: R$ {economia_total * 0.3:,.2f}")
+        st.write(f"   - Upgrade de acabamentos: R$ {economia_real * 0.4:,.2f}")
+        st.write(f"   - Áreas de lazer adicionais: R$ {economia_real * 0.3:,.2f}")
+        st.write(f"   - Tecnologias sustentáveis: R$ {economia_real * 0.3:,.2f}")
     
     with col2:
-        campanhas_marketing = economia_total * 0.2
+        campanhas_marketing = economia_real * 0.2
         st.info(f"3. Investir R$ {campanhas_marketing:,.2f} em campanhas de marketing")
-        novo_projeto = economia_total * 0.7
+        novo_projeto = economia_real * 0.7
         st.success(f"4. Iniciar um fundo de R$ {novo_projeto:,.2f} para um novo projeto")
-        retorno_estimado = economia_total * 1.15
+        retorno_estimado = economia_real * 1.15
         st.warning(f"5. Potencial retorno estimado de R$ {retorno_estimado:,.2f} se reinvestido (15% a.a.)")
 
 if __name__ == "__main__":
