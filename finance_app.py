@@ -88,9 +88,13 @@ def main():
     with col2:
         balances, balances_no_drops, monthly_payment, total_paid, total_drops, quitacao_month = calculate_balance(principal, months, admin_fee, st.session_state.dropdowns, agio)
 
+        # Novo código do gráfico
+        offset = max(balances_no_drops) * 0.01  # 1% do valor máximo como offset
+        balances_offset = [b + offset for b in balances_no_drops]
+
         fig = go.Figure()
+        fig.add_trace(go.Scatter(x=list(range(1, months+1)), y=balances_offset, mode='lines', name='Sem Dropdowns', line=dict(color='#e74c3c', dash='dash')))
         fig.add_trace(go.Scatter(x=list(range(1, months+1)), y=balances, mode='lines', name='Com Dropdowns', line=dict(color='#1e3799')))
-        fig.add_trace(go.Scatter(x=list(range(1, months+1)), y=balances_no_drops, mode='lines', name='Sem Dropdowns', line=dict(color='#e74c3c')))
         fig.update_layout(
             title='Evolução do Saldo Devedor',
             xaxis_title='Meses',
