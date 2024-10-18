@@ -8,7 +8,7 @@ st.set_page_config(page_title="Simulador Constructa", layout="wide")
 def calculate_balance(principal, months, admin_fee, dropdowns, agio):
     balance = principal
     balance_no_drops = principal
-    amortization = principal / months
+    original_amortization = principal / months
     balances = [principal]
     balances_no_drops = [principal]
     monthly_payments = []
@@ -18,8 +18,8 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
 
     for month in range(1, months + 1):
         admin_fee_value = balance * admin_fee
-        monthly_payment = amortization + admin_fee_value
-        monthly_payment_no_drops = amortization + (balance_no_drops * admin_fee)
+        monthly_payment = original_amortization + admin_fee_value
+        monthly_payment_no_drops = original_amortization + (balance_no_drops * admin_fee)
         
         if month in dropdowns:
             dropdown_value = dropdowns[month]
@@ -28,16 +28,12 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
             total_dropdown_value += dropdown_value
             total_dropdown_impact += dropdown_impact
             
-            # Recalcular amortização após dropdown
-            remaining_months = months - month + 1
-            if remaining_months > 0:
-                amortization = balance / remaining_months
-            
-        admin_fee_value = balance * admin_fee
-        monthly_payment = amortization + admin_fee_value
+            # Recalcular apenas a parcela, mantendo o prazo original
+            admin_fee_value = balance * admin_fee
+            monthly_payment = original_amortization + admin_fee_value
         
-        balance -= amortization
-        balance_no_drops -= amortization
+        balance -= original_amortization
+        balance_no_drops -= original_amortization
         
         balance = max(0, balance)
         balance_no_drops = max(0, balance_no_drops)
@@ -72,39 +68,47 @@ def main():
 
     # Resumo Financeiro
     st.subheader("Resumo Financeiro")
-    last_dropdown_month = max(st.session_state.dropdowns.keys()) if st.session_state.dropdowns else months
+    last_month = months
 
     col1, col2 = st.columns(2)
     with col1:
-        st.write(f"Saldo Devedor (no mês {last_dropdown_month})")
-        saldo_com_drops = balances[last_dropdown_month]
-        saldo_sem_drops = balances_no_drops[last_dropdown_month]
-        reducao_saldo = saldo_sem_drops - saldo_com_drops
-        st.metric("Com Dropdowns", f"R$ {saldo_com_drops:,.2f}", delta=f"-R$ {reducao_saldo:,.2f}", delta_color="inverse")
-        st.metric("Sem Dropdowns", f"R$ {saldo_sem_drops:,.2f}")
+        st.write("Saldo Devedor")
+        st.metric("Inicial", f"R$ {principal:,.2f}")
+        st.metric("Final", f"R$ {balances[-1]:,.2f}")
 
     with col2:
-        st.write(f"Parcela Mensal (no mês {last_dropdown_month})")
-        parcela_com_drops = monthly_payments[last_dropdown_month-1]
-        parcela_sem_drops = monthly_payments_no_drops[last_dropdown_month-1]
-        reducao_parcela = parcela_sem_drops - parcela_com_drops
-        st.metric("Com Dropdowns", f"R$ {parcela_com_drops:,.2f}", delta=f"-R$ {reducao_parcela:,.2f}", delta_color="inverse")
-        st.metric("Sem Dropdowns", f"R$ {parcela_sem_drops:,.2f}")
+        st.write("Parcela Mensal")
+        st.metric("Inicial", f"R$ {monthly_payments[0]:,.2f}")
+        st.metric("Final", f"R$ {monthly_payments[-1]:,.2f}")
 
-    amortizacao = total_dropdown_value
-    ganho_agio = agio_gain
-    economia_real = reducao_saldo - (amortizacao + ganho_agio)
+    total_pago = sum(monthly_payments)
+    cet = (total_pago / principal - 1) * 100
 
-    st.subheader("Análise do Impacto Financeiro")
+    st.subheader("Análise Financeira")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Amortização Antecipada", f"R$ {amortizacao:,.2f}")
+        st.metric("Total Pago", f"R$ {total_pago:,.2f}")
     with col2:
-        st.metric("Ganho com Ágio", f"R$ {ganho_agio:,.2f}")
+        st.metric("Custo Efetivo Total (CET)", f"{cet:.2f}%")
     with col3:
-        st.metric("Economia Real", f"R$ {economia_real:,.2f}")
+        st.metric("Prazo Total", f"{months} meses")
 
-    st.write(f"Impacto Total no Saldo Devedor: R$ {reducao_saldo:,.2f}")
+    if st.session_state.dropdowns:
+        amortizacao = total_dropdown_value
+        ganho_agio = agio_gain
+        economia_parcelas = sum(monthly_payments_no_drops) - sum(monthly_payments)
+        economia_real = economia_parcelas - ganho_agio
+
+        st.subheader("Impacto dos Dropdowns")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Amortização Antecipada", f"R$ {amortizacao:,.2f}")
+        with col2:
+            st.metric("Ganho com Ágio", f"R$ {ganho_agio:,.2f}")
+        with col3:
+            st.metric("Economia Real", f"R$ {economia_real:,.2f}")
+
+        st.write(f"Impacto Total: R$ {amortizacao + ganho_agio + economia_real:,.2f}")
 
     # Adicionar Dropdown
     st.subheader("Adicionar Dropdown")
@@ -139,34 +143,32 @@ def main():
     # Simulador de Datas
     st.subheader("Simulador de Datas")
     start_date = st.date_input("Data de Início do Consórcio", date.today())
-    end_date_no_drops = start_date + timedelta(days=30*months)
-    end_date_with_drops = start_date + timedelta(days=30*last_dropdown_month)
+    end_date = start_date + timedelta(days=30*months)
     
-    col1, col2 = st.columns(2)
-    col1.metric("Término sem Dropdowns", end_date_no_drops.strftime('%d/%m/%Y'))
-    col2.metric("Término com Dropdowns", end_date_with_drops.strftime('%d/%m/%Y'), delta=f"{(end_date_no_drops - end_date_with_drops).days} dias antes", delta_color="inverse")
+    st.metric("Data de Término", end_date.strftime('%d/%m/%Y'))
 
     # Oportunidades de Reinvestimento
-    st.subheader("Oportunidades de Reinvestimento")
-    st.write(f"Com a economia de R$ {economia_real:,.2f}, você poderia:")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        metro_quadrado_medio = 5000
-        area_terreno = economia_real / metro_quadrado_medio
-        st.info(f"1. Adquirir um terreno adicional de aproximadamente {area_terreno:.2f} m²")
-        st.success(f"2. Investir em melhorias no empreendimento atual:")
-        st.write(f"   - Upgrade de acabamentos: R$ {economia_real * 0.4:,.2f}")
-        st.write(f"   - Áreas de lazer adicionais: R$ {economia_real * 0.3:,.2f}")
-        st.write(f"   - Tecnologias sustentáveis: R$ {economia_real * 0.3:,.2f}")
-    
-    with col2:
-        campanhas_marketing = economia_real * 0.2
-        st.info(f"3. Investir R$ {campanhas_marketing:,.2f} em campanhas de marketing")
-        novo_projeto = economia_real * 0.7
-        st.success(f"4. Iniciar um fundo de R$ {novo_projeto:,.2f} para um novo projeto")
-        retorno_estimado = economia_real * 1.15
-        st.warning(f"5. Potencial retorno estimado de R$ {retorno_estimado:,.2f} se reinvestido (15% a.a.)")
+    if st.session_state.dropdowns:
+        st.subheader("Oportunidades de Reinvestimento")
+        st.write(f"Com a economia de R$ {economia_real:,.2f}, você poderia:")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            metro_quadrado_medio = 5000
+            area_terreno = economia_real / metro_quadrado_medio
+            st.info(f"1. Adquirir um terreno adicional de aproximadamente {area_terreno:.2f} m²")
+            st.success(f"2. Investir em melhorias no empreendimento atual:")
+            st.write(f"   - Upgrade de acabamentos: R$ {economia_real * 0.4:,.2f}")
+            st.write(f"   - Áreas de lazer adicionais: R$ {economia_real * 0.3:,.2f}")
+            st.write(f"   - Tecnologias sustentáveis: R$ {economia_real * 0.3:,.2f}")
+        
+        with col2:
+            campanhas_marketing = economia_real * 0.2
+            st.info(f"3. Investir R$ {campanhas_marketing:,.2f} em campanhas de marketing")
+            novo_projeto = economia_real * 0.7
+            st.success(f"4. Iniciar um fundo de R$ {novo_projeto:,.2f} para um novo projeto")
+            retorno_estimado = economia_real * 1.15
+            st.warning(f"5. Potencial retorno estimado de R$ {retorno_estimado:,.2f} se reinvestido (15% a.a.)")
 
 if __name__ == "__main__":
     main()
