@@ -28,11 +28,13 @@ def calculate_balance(principal, months, admin_fee, dropdowns, agio):
             total_dropdown_value += dropdown_value
             total_dropdown_impact += dropdown_impact
             
-            # Recalcular amortização e parcela após dropdown
+            # Recalcular amortização após dropdown
             remaining_months = months - month + 1
-            amortization = balance / remaining_months
-            admin_fee_value = balance * admin_fee
-            monthly_payment = amortization + admin_fee_value
+            if remaining_months > 0:
+                amortization = balance / remaining_months
+            
+        admin_fee_value = balance * admin_fee
+        monthly_payment = amortization + admin_fee_value
         
         balance -= amortization
         balance_no_drops -= amortization
