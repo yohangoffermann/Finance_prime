@@ -120,7 +120,7 @@ def main():
     # Análise de Arbitragem Financeira
     st.subheader("Análise de Arbitragem Financeira")
     valor_captado = principal
-    valor_quitacao = sum(monthly_payments[:last_dropdown_month]) + sum(st.session_state.dropdowns.values())
+    valor_quitacao = sum(monthly_payments) + sum(st.session_state.dropdowns.values())
     ganho_arbitragem = valor_captado - valor_quitacao
 
     col1, col2, col3 = st.columns(3)
@@ -138,8 +138,8 @@ def main():
         st.metric("ROI da Estratégia", f"{roi:.2f}%")
 
     # Tempo para recuperar o investimento em dropdowns
-    if ganho_arbitragem > 0:
-        tempo_recuperacao = investimento_drops / (ganho_arbitragem / last_dropdown_month)
+    if ganho_arbitragem > 0 and st.session_state.dropdowns:
+        tempo_recuperacao = investimento_drops / (ganho_arbitragem / months)
         st.write(f"Tempo estimado para recuperar o investimento em dropdowns: {tempo_recuperacao:.1f} meses")
 
     st.write(f"Esta estratégia permite captar R$ {valor_captado:,.2f} e quitar por R$ {valor_quitacao:,.2f}, " 
