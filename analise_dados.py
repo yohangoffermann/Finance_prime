@@ -2,28 +2,43 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import io
+import csv
 
 st.set_page_config(page_title="Análise de Consórcios", layout="wide")
 
-st.title("Análise de Consórcios Imobiliários")
+def detect_delimiter(file_content):
+    sniffer = csv.Sniffer()
+    dialect = sniffer.sniff(file_content[:1024])
+    return dialect.delimiter
 
-def try_read_csv(file, encodings=['utf-8', 'iso-8859-1', 'latin1', 'cp1252']):
-    for encoding in encodings:
-        try:
-            return pd.read_csv(file, sep=';', encoding=encoding)
-        except UnicodeDecodeError:
-            continue
-    raise ValueError("Não foi possível ler o arquivo com nenhum dos encodings tentados.")
+st.title("Análise de Consórcios Imobiliários")
 
 uploaded_file = st.file_uploader("Escolha o arquivo CSV", type="csv")
 
 if uploaded_file is not None:
     try:
-        # Tentar ler o arquivo com diferentes encodings
-        df = try_read_csv(uploaded_file)
+        # Ler o conteúdo do arquivo
+        content = uploaded_file.read().decode('latin1')
+        
+        # Mostrar as primeiras linhas do arquivo bruto
+        st.subheader("Primeiras 5 linhas do arquivo bruto:")
+        lines = content.split('\n')
+        for line in lines[:5]:
+            st.text(line)
+        
+        # Detectar o separador
+        delimiter = detect_delimiter(content)
+        st.write(f"Separador detectado: '{delimiter}'")
+        
+        # Usar o StringIO para criar um objeto tipo arquivo
+        csv_io = io.StringIO(content)
+        
+        # Tentar ler o CSV com o separador detectado
+        df = pd.read_csv(csv_io, sep=delimiter)
         
         # Mostrar as primeiras linhas do DataFrame
-        st.write("Primeiras linhas do arquivo:")
+        st.subheader("Primeiras linhas do DataFrame:")
         st.write(df.head())
 
         # Filtrando apenas consórcio imobiliário (segmento 1)
@@ -63,7 +78,7 @@ if uploaded_file is not None:
         st.plotly_chart(fig)
 
     except Exception as e:
-        st.error(f"Erro ao ler o arquivo: {str(e)}")
+        st.error(f"Erro ao processar o arquivo: {str(e)}")
         st.write("Por favor, verifique se o arquivo está no formato correto e tente novamente.")
 else:
     st.info("Por favor, faça upload do arquivo CSV para começar a análise.")
