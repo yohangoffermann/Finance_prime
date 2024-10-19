@@ -110,11 +110,13 @@ def main():
     fig_saldo.add_trace(go.Scatter(x=list(range(len(balances_with_drops))), y=balances_with_drops, mode='lines', name='Com Dropdowns'))
     st.plotly_chart(fig_saldo, use_container_width=True)
 
-    st.subheader("Evolução das Parcelas")
-    fig_parcelas = go.Figure()
-    fig_parcelas.add_trace(go.Scatter(x=list(range(len(payments_no_drops))), y=payments_no_drops, mode='lines', name='Sem Dropdowns'))
-    fig_parcelas.add_trace(go.Scatter(x=list(range(len(payments_with_drops))), y=payments_with_drops, mode='lines', name='Com Dropdowns'))
-    st.plotly_chart(fig_parcelas, use_container_width=True)
+    # Gráfico opcional de evolução das parcelas
+    if st.checkbox("Mostrar Evolução das Parcelas"):
+        st.subheader("Evolução das Parcelas")
+        fig_parcelas = go.Figure()
+        fig_parcelas.add_trace(go.Scatter(x=list(range(len(payments_no_drops))), y=payments_no_drops, mode='lines', name='Sem Dropdowns'))
+        fig_parcelas.add_trace(go.Scatter(x=list(range(len(payments_with_drops))), y=payments_with_drops, mode='lines', name='Com Dropdowns'))
+        st.plotly_chart(fig_parcelas, use_container_width=True)
 
     # Análise de Arbitragem
     st.subheader("Análise de Arbitragem")
