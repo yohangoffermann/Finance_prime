@@ -2,15 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import chardet
 
 st.set_page_config(page_title="Análise de Consórcios", layout="wide")
-
-def detect_encoding(file):
-    raw_data = file.read()
-    result = chardet.detect(raw_data)
-    file.seek(0)  # Reset file pointer
-    return result['encoding']
 
 st.title("Análise de Consórcios Imobiliários")
 
@@ -18,12 +11,8 @@ uploaded_file = st.file_uploader("Escolha o arquivo CSV", type="csv")
 
 if uploaded_file is not None:
     try:
-        # Detectar encoding
-        encoding = detect_encoding(uploaded_file)
-        st.write(f"Encoding detectado: {encoding}")
-
         # Tentar ler o arquivo
-        df = pd.read_csv(uploaded_file, sep=';', encoding=encoding)
+        df = pd.read_csv(uploaded_file, sep=';')
         
         # Mostrar as primeiras linhas do DataFrame
         st.write("Primeiras linhas do arquivo:")
