@@ -3,14 +3,8 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import io
-import csv
 
 st.set_page_config(page_title="Análise de Consórcios", layout="wide")
-
-def detect_delimiter(file_content):
-    sniffer = csv.Sniffer()
-    dialect = sniffer.sniff(file_content[:1024])
-    return dialect.delimiter
 
 st.title("Análise de Consórcios Imobiliários")
 
@@ -27,15 +21,11 @@ if uploaded_file is not None:
         for line in lines[:5]:
             st.text(line)
         
-        # Detectar o separador
-        delimiter = detect_delimiter(content)
-        st.write(f"Separador detectado: '{delimiter}'")
-        
         # Usar o StringIO para criar um objeto tipo arquivo
         csv_io = io.StringIO(content)
         
-        # Tentar ler o CSV com o separador detectado
-        df = pd.read_csv(csv_io, sep=delimiter)
+        # Tentar ler o CSV com o separador correto (;)
+        df = pd.read_csv(csv_io, sep=';')
         
         # Mostrar as primeiras linhas do DataFrame
         st.subheader("Primeiras linhas do DataFrame:")
