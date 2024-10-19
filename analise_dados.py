@@ -35,8 +35,8 @@ if uploaded_file is not None:
         imoveis = df[df['Código_do_segmento'] == 1]
         
         # Calculando métricas de saúde dos grupos
-        imoveis['taxa_adimplencia'] = imoveis['Quantidade_de_cotas_ativas_em_dia'] / imoveis['Quantidade_de_cotas_ativas_contempladas'].replace(0, np.nan)
-        imoveis['taxa_contemplacao'] = imoveis['Quantidade_acumulada_de_cotas_ativas_contempladas'] / imoveis['Quantidade_de_cotas_ativas_contempladas'].replace(0, np.nan)
+        imoveis['taxa_adimplencia'] = imoveis['Quantidade_de_cotas_ativas_em_dia'] / (imoveis['Quantidade_de_cotas_ativas_contempladas'] + imoveis['Quantidade_de_cotas_ativas_não_contempladas']).replace(0, np.nan)
+        imoveis['taxa_contemplacao'] = imoveis['Quantidade_acumulada_de_cotas_ativas_contempladas'] / (imoveis['Quantidade_de_cotas_ativas_contempladas'] + imoveis['Quantidade_de_cotas_ativas_não_contempladas']).replace(0, np.nan)
         imoveis['eficiencia_comercializacao'] = imoveis['Quantidade_de_cotas_comercializadas_no_mês'] / imoveis['Quantidade_de_cotas_excluídas_a_comercializar'].replace(0, np.nan)
         
         # Criando um score de saúde
@@ -70,5 +70,6 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Erro ao processar o arquivo: {str(e)}")
         st.write("Por favor, verifique se o arquivo está no formato correto e tente novamente.")
+        st.write("Detalhes do erro:", str(e))
 else:
     st.info("Por favor, faça upload do arquivo CSV para começar a análise.")
