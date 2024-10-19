@@ -54,30 +54,32 @@ def main():
     payments_no_drops, balances_no_drops = calculate_payments(principal, months, admin_fee, {}, agio)
 
     # Resumo Financeiro e KPIs
-    col1, col2 = st.columns(2)
+    st.subheader("Resumo Financeiro e KPIs")
+    col1, col2, col3 = st.columns(3)
+    
     with col1:
-        st.subheader("Resumo Financeiro")
-        st.write("Com Dropdowns:")
-        st.write(f"Saldo: R$ {balances_with_drops[-1]:,.2f}")
-        st.write(f"Parcela: R$ {payments_with_drops[-1]:,.2f}")
-        st.write(f"Quitação: {len(payments_with_drops)} meses")
-        
-        st.write("Sem Dropdowns:")
-        st.write(f"Saldo: R$ {balances_no_drops[-1]:,.2f}")
-        st.write(f"Parcela: R$ {payments_no_drops[-1]:,.2f}")
-        st.write(f"Quitação: {len(payments_no_drops)} meses")
-        
-        economia = sum(payments_no_drops) - sum(payments_with_drops)
-        st.write(f"Economia Total: R$ {economia:,.2f} ({economia/sum(payments_no_drops)*100:.2f}% de redução)")
+        st.write("Com Dropdowns")
+        st.metric("Saldo Final", f"R$ {balances_with_drops[-1]:,.0f}")
+        st.metric("Parcela Final", f"R$ {payments_with_drops[-1]:,.0f}")
+        st.metric("Quitação", f"{len(payments_with_drops)} meses")
 
     with col2:
-        st.subheader("KPIs")
+        st.write("Sem Dropdowns")
+        st.metric("Saldo Final", f"R$ {balances_no_drops[-1]:,.0f}")
+        st.metric("Parcela Final", f"R$ {payments_no_drops[-1]:,.0f}")
+        st.metric("Quitação", f"{len(payments_no_drops)} meses")
+
+    with col3:
+        st.write("KPIs")
         p_cl = payments_with_drops[0] / principal * 100
-        p_dn = payments_with_drops[0] / (principal - sum(st.session_state.dropdowns.values())) * 100
+        p_dn = payments_with_drops[0] / (principal - sum(st.session_state.dropdowns.values())) * 100 if st.session_state.dropdowns else p_cl
         cet = (sum(payments_with_drops) / principal - 1) * 100
-        st.write(f"P/CL: {p_cl:.2f}%")
-        st.write(f"P/DN: {p_dn:.2f}%")
-        st.write(f"CET: {cet:.2f}%")
+        st.metric("P/CL", f"{p_cl:.2f}%")
+        st.metric("P/DN", f"{p_dn:.2f}%")
+        st.metric("CET", f"{cet:.2f}%")
+
+    economia = sum(payments_no_drops) - sum(payments_with_drops)
+    st.metric("Economia Total", f"R$ {economia:,.0f}", f"{economia/sum(payments_no_drops)*100:.2f}% de redução")
 
     # Adicionar Dropdown
     st.subheader("Adicionar Dropdown")
@@ -122,9 +124,9 @@ def main():
     roi = (ganho_arbitragem / sum(st.session_state.dropdowns.values()) - 1) * 100 if st.session_state.dropdowns else 0
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Valor Captado", f"R$ {valor_captado:,.2f}")
-    col2.metric("Valor Quitação", f"R$ {valor_quitacao:,.2f}")
-    col3.metric("Ganho na Arbitragem", f"R$ {ganho_arbitragem:,.2f}")
+    col1.metric("Valor Captado", f"R$ {valor_captado/1e6:.2f}M")
+    col2.metric("Valor Quitação", f"R$ {valor_quitacao/1e6:.2f}M")
+    col3.metric("Ganho na Arbitragem", f"R$ {ganho_arbitragem/1e6:.2f}M")
     col4.metric("ROI da Estratégia", f"{roi:.2f}%")
 
 if __name__ == "__main__":
