@@ -7,12 +7,20 @@ st.set_page_config(page_title="Análise de Consórcios", layout="wide")
 
 st.title("Análise de Consórcios Imobiliários")
 
+def try_read_csv(file, encodings=['utf-8', 'iso-8859-1', 'latin1', 'cp1252']):
+    for encoding in encodings:
+        try:
+            return pd.read_csv(file, sep=';', encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("Não foi possível ler o arquivo com nenhum dos encodings tentados.")
+
 uploaded_file = st.file_uploader("Escolha o arquivo CSV", type="csv")
 
 if uploaded_file is not None:
     try:
-        # Tentar ler o arquivo
-        df = pd.read_csv(uploaded_file, sep=';')
+        # Tentar ler o arquivo com diferentes encodings
+        df = try_read_csv(uploaded_file)
         
         # Mostrar as primeiras linhas do DataFrame
         st.write("Primeiras linhas do arquivo:")
