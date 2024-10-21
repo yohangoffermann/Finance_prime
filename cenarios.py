@@ -35,6 +35,12 @@ st.sidebar.write(f"Parcelas Mensais: {parcelas_percentual}%")
 
 num_baloes = st.sidebar.number_input("Número de Balões", 0, 5, 2, step=1)
 
+# Adicionar opção para escolher o modelo de pagamento
+modelo_pagamento_constructa = st.sidebar.radio(
+    "Modelo de Pagamento Constructa",
+    ("Tradicional", "Pagamento na Transferência do Consórcio")
+)
+
 # Função para gerar o fluxo de caixa da obra
 def gerar_fluxo_caixa(perfil, prazo):
     if perfil == "Linear":
@@ -75,8 +81,23 @@ lucro_financiamento = lucro_operacional - juros_financiamento
 lance = custo_construcao * (lance_consorcio / 100)
 rendimento_selic = lance * ((1 + taxa_selic/100)**(prazo_meses/12) - 1)
 custo_consorcio = custo_construcao * ((1 + incc/100)**(prazo_meses/12) - 1) - custo_construcao
-agio = custo_construcao * (agio_consorcio / 100)
-lucro_constructa = lucro_operacional + rendimento_selic + agio - custo_consorcio
+
+# Calcular total de pagamentos parciais e ágio necessário
+total_pagamentos_parciais = (entrada_percentual + balao_percentual + parcelas_percentual) * vgv / 100
+agio_necessario = vgv - (custo_construcao + total_pagamentos_parciais)
+percentual_agio = (agio_necessario / custo_construcao) * 100
+
+# Exibir o percentual de ágio calculado
+if modelo_pagamento_constructa == "Pagamento na Transferência do Consórcio":
+    st.sidebar.write(f"Ágio Calculado: {percentual_agio:.2f}%")
+
+# Cálculo do lucro no cenário Constructa
+if modelo_pagamento_constructa == "Pagamento na Transferência do Consórcio":
+    agio = agio_necessario
+else:
+    agio = custo_construcao * (agio_consorcio / 100)
+
+lucro_constructa = lucro_operacional + rendimento_selic + agio + total_pagamentos_parciais - custo_consorcio
 
 # Criando DataFrame com os resultados
 cenarios = {
@@ -135,6 +156,9 @@ Com base nos parâmetros fornecidos e considerando o fluxo de caixa {fluxo_caixa
 2. O Financiamento Tradicional resulta em um lucro de R$ {lucro_financiamento:.2f} milhões, com uma margem de {(lucro_financiamento/vgv)*100:.2f}%.
 
 3. O modelo Constructa resulta em um lucro de R$ {lucro_constructa:.2f} milhões, com uma margem de {(lucro_constructa/vgv)*100:.2f}%.
+
+O modelo de pagamento escolhido para o Constructa foi "{modelo_pagamento_constructa}".
+{f'Neste modelo, o ágio calculado é de {percentual_agio:.2f}% sobre o custo de construção.' if modelo_pagamento_constructa == "Pagamento na Transferência do Consórcio" else ''}
 
 O modelo Constructa apresenta {
     "o maior" if lucro_constructa > max(lucro_auto, lucro_financiamento) else "um"
