@@ -31,30 +31,33 @@ def get_user_inputs():
     params['parcelas_percentual'] = 100 - params['entrada_percentual'] - sum(baloes)
     st.sidebar.write(f"Parcelas Mensais: {params['parcelas_percentual']}%")
 
+    params['prazo_parcelas'] = st.sidebar.number_input("Prazo das Parcelas (meses)", value=120, min_value=params['prazo_meses'], step=1)
+
     return params
 
 def calcular_fluxo_caixa(params):
-    meses = params['prazo_meses']
+    meses_obra = params['prazo_meses']
+    meses_total = max(meses_obra, params['prazo_parcelas'])
     vgv = params['vgv']
     custo_obra = vgv * (params['custo_obra_percentual'] / 100)
 
-    fluxo = pd.DataFrame(0, index=range(meses), columns=['Receitas', 'Custos Obra', 'Saldo'])
+    fluxo = pd.DataFrame(0, index=range(meses_total), columns=['Receitas', 'Custos Obra', 'Saldo'])
     
     # Entrada
     fluxo.loc[0, 'Receitas'] = vgv * (params['entrada_percentual'] / 100)
     
     # Balões
     for i, balao in enumerate(params['baloes']):
-        mes_balao = int((i + 1) * meses / (len(params['baloes']) + 1))
+        mes_balao = int((i + 1) * meses_obra / (len(params['baloes']) + 1))
         fluxo.loc[mes_balao, 'Receitas'] += vgv * (balao / 100)
     
     # Parcelas
-    valor_parcela = (vgv * (params['parcelas_percentual'] / 100)) / meses
-    for mes in range(meses):
+    valor_parcela = (vgv * (params['parcelas_percentual'] / 100)) / params['prazo_parcelas']
+    for mes in range(params['prazo_parcelas']):
         fluxo.loc[mes, 'Receitas'] += valor_parcela
     
     # Custos da Obra (distribuição linear simplificada)
-    fluxo['Custos Obra'] = custo_obra / meses
+    fluxo.loc[:meses_obra-1, 'Custos Obra'] = custo_obra / meses_obra
     
     # Saldo
     fluxo['Saldo'] = fluxo['Receitas'].cumsum() - fluxo['Custos Obra'].cumsum()
@@ -97,6 +100,9 @@ def display_results(fluxo_caixa, params):
     st.write(f"Custo Total da Obra: R$ {custo_total:.2f} milhões")
     st.write(f"Margem do Projeto: {margem:.2f}%")
 
+    valor_parcela = (params['vgv'] * (params['parcelas_percentual'] / 100)) / params['prazo_parcelas']
+    st.write(f"Valor da Parcela Mensal: R$ {valor_parcela*1e6:.2f}")
+
     if max_exposicao < 0:
         st.write(f"Necessidade de Capital de Giro: R$ {abs(max_exposicao):.2f} milhões")
         st.write("Considere estratégias para reduzir a exposição máxima de caixa, como negociar melhores condições de pagamento com fornecedores ou buscar financiamento para cobrir o período de exposição negativa.")
@@ -107,6 +113,10 @@ def display_results(fluxo_caixa, params):
         st.write(f"O projeto apresenta {meses_negativos} meses com fluxo de caixa negativo. Considere estratégias para melhorar o fluxo de caixa nesses períodos.")
     else:
         st.write("O projeto mantém fluxo de caixa positivo durante toda sua duração.")
+
+    st.write(f"Prazo total do fluxo de caixa: {len(fluxo_caixa)} meses")
+    st.write(f"Prazo de construção: {params['prazo_meses']} meses")
+    st.write(f"Prazo das parcelas: {params['prazo_parcelas']} meses")
 
 if __name__ == "__main__":
     main()
