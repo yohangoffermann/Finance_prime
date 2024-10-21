@@ -2,6 +2,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
 import numpy as np
+import plotly.express as px
 import plotly.graph_objects as go
 
 # Configuração da página
@@ -46,57 +47,40 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     
     return fluxo
 
-def mostrar_grafico(fluxo):
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=fluxo['Mês'], 
-        y=fluxo['Receitas'], 
-        name='Receitas', 
-        marker_color='green'
-    ))
-    
-    fig.add_trace(go.Bar(
-        x=fluxo['Mês'], 
-        y=-fluxo['Custos'], 
-        name='Custos', 
-        marker_color='red'
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=fluxo['Mês'], 
-        y=fluxo['Saldo Acumulado'], 
-        name='Saldo Acumulado', 
-        mode='lines+markers', 
-        line=dict(color='blue', width=3),
-        yaxis='y2'
-    ))
-    
-    fig.update_layout(
+def mostrar_graficos(fluxo, percentual_inicio, percentual_meio, percentual_fim,
+                     percentual_lancamento, percentual_baloes, percentual_parcelas):
+    # Gráfico de Fluxo de Caixa
+    fig_fluxo = go.Figure()
+    fig_fluxo.add_trace(go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', marker_color='green'))
+    fig_fluxo.add_trace(go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', marker_color='red'))
+    fig_fluxo.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', 
+                                   mode='lines+markers', line=dict(color='blue', width=3), yaxis='y2'))
+    fig_fluxo.update_layout(
         title='Fluxo de Caixa ao Longo do Tempo',
         xaxis_title='Mês',
         yaxis_title='Valores (milhões R$)',
-        yaxis2=dict(
-            title='Saldo Acumulado (milhões R$)',
-            overlaying='y',
-            side='right'
-        ),
+        yaxis2=dict(title='Saldo Acumulado (milhões R$)', overlaying='y', side='right'),
         barmode='relative',
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=50, r=50, t=80, b=50),
-        height=600
+        height=500
     )
+    st.plotly_chart(fig_fluxo, use_container_width=True)
 
-    fig.add_shape(
-        type="line",
-        x0=fluxo['Mês'].min(),
-        y0=0,
-        x1=fluxo['Mês'].max(),
-        y1=0,
-        line=dict(color="black", width=1, dash="dash"),
-    )
+    # Gráfico de Pizza para Distribuição de Custos
+    labels = ['Início', 'Meio', 'Fim']
+    values = [percentual_inicio, percentual_meio, percentual_fim]
+    fig_pizza_custos = px.pie(values=values, names=labels, title='Distribuição dos Custos')
+    
+    # Gráfico de Pizza para Distribuição de Vendas
+    labels_vendas = ['Lançamento', 'Balões', 'Parcelas']
+    values_vendas = [percentual_lancamento, percentual_baloes, percentual_parcelas]
+    fig_pizza_vendas = px.pie(values=values_vendas, names=labels_vendas, title='Distribuição das Vendas')
 
-    st.plotly_chart(fig, use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(fig_pizza_custos, use_container_width=True)
+    with col2:
+        st.plotly_chart(fig_pizza_vendas, use_container_width=True)
 
 # Menu de navegação lateral
 with st.sidebar:
@@ -175,10 +159,16 @@ elif selected == "Fluxo de Caixa":
         st.session_state.prazo_parcelas
     )
 
+    mostrar_graficos(fluxo_auto, 
+                     st.session_state.percentual_inicio, 
+                     st.session_state.percentual_meio, 
+                     st.session_state.percentual_fim,
+                     st.session_state.percentual_lancamento, 
+                     st.session_state.percentual_baloes, 
+                     st.session_state.percentual_parcelas)
+
     st.subheader('Fluxo de Caixa Mensal')
     st.dataframe(fluxo_auto)
-
-    mostrar_grafico(fluxo_auto)
 
 elif selected == "Análise":
     st.header("Análise do Projeto")
@@ -232,3 +222,19 @@ elif selected == "Análise":
     6. O projeto atinge o ponto de equilíbrio (payback) no mês {mes_payback}{f', com um saldo positivo de R$ {valor_payback:.2f} milhões' if isinstance(mes_payback, int) else ''}.
     7. A margem final do projeto é de {margem:.2f}%.
     """)
+
+    mostrar_graficos(fluxo_auto, 
+                     st.session_state.percentual_inicio, 
+                     st.session_state.percentual_meio, 
+                     st.session_state.percentual_fim,
+                     st.session_state.percentual_lancamento, 
+                     st.session_state.percentual_baloes, 
+                     st.session_state.percentual_parcelas)
+
+if __name__ == "__main__":
+    st.sidebar.title("Sobre")
+    st.sidebar.info(
+        "Esta é uma aplicação de análise de fluxo de caixa "
+        "para projetos imobiliários auto financiados. "
+        "Desenvolvida com Streamlit."
+    )
