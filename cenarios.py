@@ -2,8 +2,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import altair as alt
 
 # Configuração da página
 st.set_page_config(page_title="Análise de Fluxo de Caixa", layout="wide")
@@ -66,62 +65,53 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     return fluxo
 
 def mostrar_graficos(fluxo):
-    colors = ["#0068c9", "#83c9ff", "#ff2b2b", "#ffabab", "#29b09d"]
+    # Prepare os dados
+    df_long = pd.melt(fluxo, id_vars=['Mês'], value_vars=['Receitas', 'Custos', 'Saldo Mensal', 'Saldo Acumulado'])
+    
+    # Defina a escala de cores
+    color_scale = alt.Scale(domain=['Receitas', 'Custos', 'Saldo Mensal', 'Saldo Acumulado'],
+                            range=['#0068c9', '#ff2b2b', '#29b09d', '#ffabab'])
 
-    fig = make_subplots(rows=2, cols=2, 
-                        subplot_titles=("Receitas e Custos", "Fluxo de Caixa", 
-                                        "Saldo Acumulado", "Comparação"),
-                        vertical_spacing=0.1,
-                        horizontal_spacing=0.05)
-
-    # Receitas e Custos
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', 
-                             fill='tozeroy', mode='none', fillcolor=f'rgba(0, 104, 201, 0.7)'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', 
-                             fill='tozeroy', mode='none', fillcolor=f'rgba(255, 43, 43, 0.7)'), row=1, col=1)
-
-    # Fluxo de Caixa
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Mensal'], name='Saldo Mensal', 
-                             line=dict(color=colors[2])), row=1, col=2)
-
-    # Saldo Acumulado
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', 
-                             line=dict(color=colors[3])), row=2, col=1)
-
-    # Comparação
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', 
-                             line=dict(color=colors[0])), row=2, col=2)
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', 
-                             line=dict(color=colors[2])), row=2, col=2)
-
-    fig.update_layout(
-        title_text="Análise de Fluxo de Caixa",
-        height=800,
-        font=dict(family="Source Sans Pro, sans-serif", size=12, color="#808495"),
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=40, r=40, t=60, b=40)
+    # Crie o gráfico base
+    base = alt.Chart(df_long).encode(
+        x=alt.X('Mês:Q', axis=alt.Axis(grid=False, tickMinStep=1)),
+        y=alt.Y('value:Q', axis=alt.Axis(grid=True, title='Valor (milhões R$)')),
+        color=alt.Color('variable:N', scale=color_scale, legend=alt.Legend(orient='bottom', title=None))
+    ).properties(
+        width=600,
+        height=400
     )
 
-    fig.update_xaxes(
-        showgrid=False,
-        zeroline=False,
-        title_text="",
-        tickfont=dict(size=12, color="#808495"),
-        tickmode='linear',
-        dtick=6
+    # Crie os gráficos de área para Receitas e Custos
+    area = base.mark_area(opacity=0.7).transform_filter(
+        alt.FieldOneOfPredicate(field='variable', oneOf=['Receitas', 'Custos'])
     )
 
-    fig.update_yaxes(
-        showgrid=True,
-        gridcolor='#e6eaf1',
-        zeroline=False,
-        title_text="",
-        tickfont=dict(size=12, color="#808495")
+    # Crie as linhas para Saldo Mensal e Saldo Acumulado
+    lines = base.mark_line().transform_filter(
+        alt.FieldOneOfPredicate(field='variable', oneOf=['Saldo Mensal', 'Saldo Acumulado'])
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    # Combine os gráficos
+    chart = (area + lines).interactive()
+
+    # Configure o estilo do gráfico
+    chart = chart.configure_axis(
+        labelFontSize=12,
+        titleFontSize=14,
+        labelColor='#808495',
+        titleColor='#808495'
+    ).configure_legend(
+        labelFontSize=12,
+        titleFontSize=14,
+        labelColor='#808495',
+        titleColor='#808495'
+    ).configure_view(
+        strokeWidth=0
+    )
+
+    # Exiba o gráfico no Streamlit
+    st.altair_chart(chart, use_container_width=True)
 
 # Menu de navegação lateral
 with st.sidebar:
@@ -253,7 +243,7 @@ elif selected == "Análise":
        - {st.session_state.percentual_inicio}% no início da obra
        - {st.session_state.percentual_meio}% no meio da obra
        - {st.session_state.percentual_fim}% no final da obra
-    5. A exposição máxima de caixa é de R$ {exposicao_maxima:.2f} milhões, o que representa o momento de maior necessidade de capital no projeto.
+        5. A exposição máxima de caixa é de R$ {exposicao_maxima:.2f} milhões, o que representa o momento de maior necessidade de capital no projeto.
     6. O projeto atinge o ponto de equilíbrio (payback) no mês {mes_payback}{f', com um saldo positivo de R$ {valor_payback:.2f} milhões' if isinstance(mes_payback, int) else ''}.
     7. A margem final do projeto é de {margem:.2f}%.
     """)
@@ -265,5 +255,5 @@ if __name__ == "__main__":
     st.sidebar.info(
         "Esta é uma aplicação de análise de fluxo de caixa "
         "para projetos imobiliários auto financiados. "
-        "Desenvolvida com Streamlit."
+        "Desenvolvida com Streamlit e Altair."
     )
