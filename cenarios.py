@@ -80,9 +80,10 @@ def calcular_fluxo_caixa(params, custo_construcao, credito_consorcio, lance):
 def calcular_oportunidades_agio(params, fluxo_caixa, credito_consorcio):
     oportunidades = []
     saldo_consorcio = credito_consorcio
+    valor_parcela = (params['vgv'] * (params['parcelas_percentual'] / 100)) / params['prazo_meses']
     
     for mes, row in fluxo_caixa.iterrows():
-        if row['Receitas'] > valor_parcela or mes == 0:  # Entrada ou balão
+        if row['Receitas'] > valor_parcela * 1.1 or mes == 0:  # Entrada, balão ou valor significativamente maior
             agio_potencial = min(saldo_consorcio, row['Receitas']) * 0.2  # 20% de ágio estimado
             oportunidades.append({
                 'Mês': mes,
@@ -130,10 +131,6 @@ def display_results(results, params):
     st.subheader("Resultados Financeiros")
     display_resultados_finais(results["Resultados Finais"])
 
-    # Análise de sensibilidade
-    st.subheader("Análise de Sensibilidade")
-    plot_analise_sensibilidade(params, results)
-
 def plot_fluxo_caixa(fluxo_caixa):
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(fluxo_caixa.index, fluxo_caixa['Saldo'], label='Saldo Acumulado')
@@ -153,10 +150,6 @@ def plot_oportunidades_agio(oportunidades_agio):
 
 def display_resultados_finais(resultados):
     st.table(pd.DataFrame([resultados]).T)
-
-def plot_analise_sensibilidade(params, results):
-    # Simplificada para este exemplo
-    st.write("Análise de sensibilidade não implementada nesta versão.")
 
 if __name__ == "__main__":
     main()
