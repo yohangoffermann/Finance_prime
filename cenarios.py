@@ -32,6 +32,18 @@ def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual,
     fluxo['Saldo'] = fluxo['Receitas'].cumsum() - fluxo['Custos'].cumsum()
     return fluxo
 
+def calculate_irr(cashflows):
+    def npv(rate):
+        return sum(cf / (1 + rate) ** i for i, cf in enumerate(cashflows))
+    
+    rate = 0.1  # Initial guess
+    for _ in range(100):  # Max iterations
+        new_rate = rate - npv(rate) / ((npv(rate + 0.0001) - npv(rate)) / 0.0001)
+        if abs(new_rate - rate) < 0.000001:
+            return new_rate
+        rate = new_rate
+    return None  # If no solution is found
+
 st.title('Comparativo de Cenários de Incorporação Imobiliária')
 
 vgv = st.sidebar.number_input('VGV (milhões R$)', value=35.0, step=0.1)
@@ -62,7 +74,9 @@ results = pd.DataFrame({
     'Cenário': ['Auto Financiado', 'Financiamento Tradicional', 'Constructa'],
     'Lucro Final (milhões R$)': [fluxo_auto['Saldo'].iloc[-1], fluxo_financiamento['Saldo'].iloc[-1], fluxo_constructa['Saldo'].iloc[-1]],
     'Exposição Máxima (milhões R$)': [-fluxo_auto['Saldo'].min(), -fluxo_financiamento['Saldo'].min(), -fluxo_constructa['Saldo'].min()],
-    'TIR (%)': [np.irr(fluxo_auto['Saldo']) * 12 * 100, np.irr(fluxo_financiamento['Saldo']) * 12 * 100, np.irr(fluxo_constructa['Saldo']) * 12 * 100]
+    'TIR (%)': [calculate_irr(fluxo_auto['Saldo']) * 12 * 100, 
+                calculate_irr(fluxo_financiamento['Saldo']) * 12 * 100, 
+                calculate_irr(fluxo_constructa['Saldo']) * 12 * 100]
 })
 
 st.write(results)
