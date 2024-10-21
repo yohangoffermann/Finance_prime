@@ -95,8 +95,8 @@ def mostrar_grafico(fluxo):
         x=fluxo['Mês'], 
         y=fluxo['Saldo Acumulado'], 
         name='Saldo Acumulado', 
-        mode='lines', 
-        line=dict(color='blue', width=2),
+        mode='lines+markers',  # Adicionando marcadores
+        line=dict(color='blue', width=3),  # Aumentando a espessura
         yaxis='y2'
     ))
     
@@ -125,7 +125,7 @@ def mostrar_grafico(fluxo):
     )
 
     st.plotly_chart(fig, use_container_width=True)
-
+    
 def main():
     st.title("Análise de Fluxo de Caixa - Modelo Auto Financiado")
 
