@@ -58,7 +58,7 @@ def main():
     payments_no_drops, balances_no_drops, _, _ = calculate_payments(principal, months, admin_fee, {}, agio)
 
     # Determinar o mês do último dropdown
-    last_dropdown_month = max(st.session_state.dropdowns.keys()) if st.session_state.dropdowns else months
+    last_dropdown_month = max(st.session_state.dropdowns.keys()) if st.session_state.dropdowns else 0
 
     # Resumo Financeiro e KPIs
     st.subheader("Resumo Financeiro e KPIs")
@@ -66,14 +66,22 @@ def main():
     
     with col1:
         st.write("Com Dropdowns")
-        st.metric("Saldo no Mês " + str(last_dropdown_month), f"R$ {balances_with_drops[last_dropdown_month]:,.0f}")
-        st.metric("Parcela no Mês " + str(last_dropdown_month), f"R$ {payments_with_drops[last_dropdown_month-1]:,.0f}")
+        if last_dropdown_month > 0:
+            st.metric("Saldo no Mês " + str(last_dropdown_month), f"R$ {balances_with_drops[last_dropdown_month]:,.0f}")
+            st.metric("Parcela no Mês " + str(last_dropdown_month), f"R$ {payments_with_drops[last_dropdown_month-1]:,.0f}")
+        else:
+            st.metric("Saldo Inicial", f"R$ {principal:,.0f}")
+            st.metric("Parcela Inicial", f"R$ {payments_with_drops[0]:,.0f}")
         st.metric("Quitação", f"{len(payments_with_drops)} meses")
 
     with col2:
         st.write("Sem Dropdowns")
-        st.metric("Saldo no Mês " + str(last_dropdown_month), f"R$ {balances_no_drops[last_dropdown_month]:,.0f}")
-        st.metric("Parcela no Mês " + str(last_dropdown_month), f"R$ {payments_no_drops[last_dropdown_month-1]:,.0f}")
+        if last_dropdown_month > 0:
+            st.metric("Saldo no Mês " + str(last_dropdown_month), f"R$ {balances_no_drops[last_dropdown_month]:,.0f}")
+            st.metric("Parcela no Mês " + str(last_dropdown_month), f"R$ {payments_no_drops[last_dropdown_month-1]:,.0f}")
+        else:
+            st.metric("Saldo Inicial", f"R$ {principal:,.0f}")
+            st.metric("Parcela Inicial", f"R$ {payments_no_drops[0]:,.0f}")
         st.metric("Quitação", f"{len(payments_no_drops)} meses")
 
     with col3:
@@ -85,8 +93,11 @@ def main():
         st.metric("CET Total", f"{cet_total:.2f}%")
         st.metric("CET Anual", f"{cet_anual:.2f}%")
 
-    economia = sum(payments_no_drops[:last_dropdown_month]) - sum(payments_with_drops[:last_dropdown_month])
-    st.metric("Economia até o Mês " + str(last_dropdown_month), f"R$ {economia:,.0f}", f"{economia/sum(payments_no_drops[:last_dropdown_month])*100:.2f}% de redução")
+    if last_dropdown_month > 0:
+        economia = sum(payments_no_drops[:last_dropdown_month]) - sum(payments_with_drops[:last_dropdown_month])
+        st.metric("Economia até o Mês " + str(last_dropdown_month), 
+                  f"R$ {economia:,.0f}", 
+                  f"{economia/sum(payments_no_drops[:last_dropdown_month])*100:.2f}% de redução")
 
     # Adicionar Dropdown
     st.subheader("Adicionar Dropdown")
@@ -133,16 +144,15 @@ def main():
     # Análise de Arbitragem
     st.subheader("Análise de Arbitragem")
     valor_captado = principal
-    valor_quitacao = sum(payments_with_drops) + total_dropdown_value
-    ganho_arbitragem = (valor_captado + total_agio) - valor_quitacao
-    roi = (total_agio / total_dropdown_value) * 100 if total_dropdown_value > 0 else 0
+    valor_efetivamente_pago = sum(payments_with_drops) + total_dropdown_value - total_agio
+    ganho_arbitragem = valor_captado - valor_efetivamente_pago
+    desconto_efetivo_percentual = (ganho_arbitragem / valor_captado) * 100
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("Valor Captado", f"R$ {valor_captado/1e6:.2f}M")
-    col2.metric("Valor Quitação", f"R$ {valor_quitacao/1e6:.2f}M")
-    col3.metric("Ganho com Ágio", f"R$ {total_agio/1e6:.2f}M")
-    col4.metric("Ganho na Arbitragem", f"R$ {ganho_arbitragem/1e6:.2f}M")
-    col5.metric("ROI da Estratégia", f"{roi:.2f}%")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Valor do Crédito", f"R$ {valor_captado/1e6:.2f}M")
+    col2.metric("Valor Efetivamente Pago", f"R$ {valor_efetivamente_pago/1e6:.2f}M")
+    col3.metric("Ganho na Arbitragem", f"R$ {ganho_arbitragem/1e6:.2f}M")
+    col4.metric("Desconto Efetivo", f"{desconto_efetivo_percentual:.2f}%")
 
 if __name__ == "__main__":
     main()
