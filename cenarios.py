@@ -1,46 +1,102 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Configuração da página
 st.set_page_config(page_title="Comparativo de Cenários de Incorporação", layout="wide")
 
-# Título
 st.title("Comparativo de Cenários de Incorporação Imobiliária")
 
-# Dados dos cenários
+# Inputs do usuário
+st.sidebar.header("Parâmetros Econômicos")
+
+vgv = st.sidebar.number_input("Valor Geral de Vendas (VGV) em milhões R$", value=35.0, step=0.1)
+custo_construcao_percentual = st.sidebar.slider("Custo de Construção (% do VGV)", 50, 90, 70)
+prazo_meses = st.sidebar.number_input("Prazo de Construção (meses)", value=48, step=1)
+taxa_selic = st.sidebar.number_input("Taxa Selic (% a.a.)", value=11.0, step=0.1)
+incc = st.sidebar.number_input("INCC (% a.a.)", value=6.0, step=0.1)
+taxa_financiamento = st.sidebar.number_input("Taxa de Financiamento Tradicional (% a.a.)", value=12.0, step=0.1)
+percentual_financiado = st.sidebar.slider("Percentual Financiado (Financiamento Tradicional)", 20, 80, 40)
+lance_consorcio = st.sidebar.slider("Lance do Consórcio (%)", 20, 40, 25)
+agio_consorcio = st.sidebar.slider("Ágio do Consórcio na Venda (%)", 20, 60, 47)
+
+# Novos inputs para fluxo de caixa e estrutura de recebíveis
+st.sidebar.header("Fluxo de Caixa e Recebíveis")
+
+fluxo_caixa = st.sidebar.selectbox("Perfil do Fluxo de Caixa da Obra", 
+                                   ["Linear", "Front Loaded", "Back Loaded"])
+
+entrada_percentual = st.sidebar.slider("Entrada (%)", 0, 50, 20)
+balao_percentual = st.sidebar.slider("Balões (%)", 0, 50, 20)
+parcelas_percentual = 100 - entrada_percentual - balao_percentual
+
+st.sidebar.write(f"Parcelas Mensais: {parcelas_percentual}%")
+
+num_baloes = st.sidebar.number_input("Número de Balões", 0, 5, 2, step=1)
+
+# Função para gerar o fluxo de caixa da obra
+def gerar_fluxo_caixa(perfil, prazo):
+    if perfil == "Linear":
+        return np.ones(prazo) / prazo
+    elif perfil == "Front Loaded":
+        return np.array([2/prazo if i < prazo/2 else 1/(2*prazo) for i in range(prazo)])
+    else:  # Back Loaded
+        return np.array([1/(2*prazo) if i < prazo/2 else 2/prazo for i in range(prazo)])
+
+# Função para gerar o fluxo de recebíveis
+def gerar_recebíveis(prazo, entrada, balao, parcelas, num_baloes):
+    fluxo = np.zeros(prazo)
+    fluxo[0] = entrada
+    balao_individual = balao / num_baloes
+    balao_meses = np.linspace(0, prazo-1, num_baloes+2)[1:-1].astype(int)
+    fluxo[balao_meses] += balao_individual
+    parcela_mensal = parcelas / (prazo - 1)
+    fluxo[1:] += parcela_mensal
+    return fluxo
+
+# Cálculos
+custo_construcao = vgv * (custo_construcao_percentual / 100)
+lucro_operacional = vgv - custo_construcao
+
+fluxo_obra = gerar_fluxo_caixa(fluxo_caixa, prazo_meses)
+fluxo_recebiveis = gerar_recebíveis(prazo_meses, entrada_percentual/100, balao_percentual/100, 
+                                    parcelas_percentual/100, num_baloes)
+
+# Cenário Auto Financiado
+fluxo_caixa_auto = fluxo_recebiveis * vgv - fluxo_obra * custo_construcao
+lucro_auto = np.sum(fluxo_caixa_auto)
+
+# Cenário Financiamento Tradicional
+valor_financiado = custo_construcao * (percentual_financiado / 100)
+juros_financiamento = valor_financiado * ((1 + taxa_financiamento/100)**(prazo_meses/12) - 1)
+fluxo_caixa_financiamento = fluxo_caixa_auto.copy()
+fluxo_caixa_financiamento[0] += valor_financiado
+fluxo_caixa_financiamento[-1] -= (valor_financiado + juros_financiamento)
+lucro_financiamento = np.sum(fluxo_caixa_financiamento)
+
+# Cenário Constructa
+lance = custo_construcao * (lance_consorcio / 100)
+rendimento_selic = lance * ((1 + taxa_selic/100)**(prazo_meses/12) - 1)
+custo_consorcio = custo_construcao * ((1 + incc/100)**(prazo_meses/12) - 1)
+agio = custo_construcao * (agio_consorcio / 100)
+fluxo_caixa_constructa = fluxo_caixa_auto.copy()
+fluxo_caixa_constructa[0] -= lance
+fluxo_caixa_constructa += fluxo_obra * (custo_construcao / prazo_meses)  # Adiciona o fluxo do consórcio
+fluxo_caixa_constructa[-1] += agio + rendimento_selic - custo_consorcio
+lucro_constructa = np.sum(fluxo_caixa_constructa)
+
+# Criando DataFrame com os resultados
 cenarios = {
-    "Auto Financiado": {"Lucro": 10.5, "Margem": 30.00, "Capital Inicial": 5.25},
-    "Financiamento Tradicional": {"Lucro": 5.23, "Margem": 14.94, "Capital Inicial": 14.7},
-    "Constructa": {"Lucro": 21.03, "Margem": 60.09, "Capital Inicial": 6.125}
+    "Auto Financiado": {"Lucro": lucro_auto, "Margem": (lucro_auto/vgv)*100, "Capital Inicial": -min(0, np.min(np.cumsum(fluxo_caixa_auto)))},
+    "Financiamento Tradicional": {"Lucro": lucro_financiamento, "Margem": (lucro_financiamento/vgv)*100, "Capital Inicial": custo_construcao - valor_financiado},
+    "Constructa": {"Lucro": lucro_constructa, "Margem": (lucro_constructa/vgv)*100, "Capital Inicial": lance}
 }
 
-# Matriz de risco atualizada
-fatores_risco = {
-    "Mercado": {"Auto Financiado": 3, "Financiamento Tradicional": 3, "Constructa": 2},
-    "Liquidez": {"Auto Financiado": 4, "Financiamento Tradicional": 3, "Constructa": 2},
-    "Crédito": {"Auto Financiado": 4, "Financiamento Tradicional": 3, "Constructa": 2},
-    "Taxa de Juros": {"Auto Financiado": 1, "Financiamento Tradicional": 5, "Constructa": 2},
-    "Operacional": {"Auto Financiado": 3, "Financiamento Tradicional": 3, "Constructa": 3},
-    "Financiamento": {"Auto Financiado": 2, "Financiamento Tradicional": 4, "Constructa": 3},
-    "Execução": {"Auto Financiado": 2, "Financiamento Tradicional": 3, "Constructa": 2},
-    "Regulatório": {"Auto Financiado": 2, "Financiamento Tradicional": 2, "Constructa": 2}
-}
-
-# Cálculo do risco total
-risco_total = {cenario: sum(fatores_risco[fator][cenario] for fator in fatores_risco) / len(fatores_risco) 
-               for cenario in cenarios.keys()}
-
-# Adicionar risco total ao dicionário de cenários
-for cenario, risco in risco_total.items():
-    cenarios[cenario]["Risco Total"] = risco
-
-# Criar DataFrame
 df = pd.DataFrame(cenarios).T.reset_index()
-df.columns = ["Cenário", "Lucro", "Margem", "Capital Inicial", "Risco Total"]
+df.columns = ["Cenário", "Lucro", "Margem", "Capital Inicial"]
 
-# Gráfico de barras para Lucro e Margem
+# Visualizações
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
 sns.barplot(x="Cenário", y="Lucro", data=df, ax=ax1, palette="viridis")
@@ -54,58 +110,46 @@ ax2.set_ylabel("Margem (%)")
 plt.tight_layout()
 st.pyplot(fig)
 
-# Gráfico de dispersão para Capital Inicial vs Risco Total
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.scatterplot(x="Capital Inicial", y="Risco Total", hue="Cenário", size="Lucro", 
-                sizes=(100, 1000), data=df, ax=ax, palette="viridis")
-ax.set_title("Capital Inicial vs Risco Total")
-ax.set_xlabel("Capital Inicial (milhões R$)")
-ax.set_ylabel("Risco Total")
-plt.tight_layout()
-st.pyplot(fig)
-
 # Tabela comparativa
 st.subheader("Tabela Comparativa")
-st.table(df.set_index("Cenário"))
+st.table(df.set_index("Cenário").round(2))
 
-# Matriz de risco detalhada
-st.subheader("Matriz de Risco Detalhada")
-risco_df = pd.DataFrame(fatores_risco)
-st.table(risco_df)
-
-# Gráfico de radar para comparação dos riscos
-st.subheader("Comparação de Riscos por Cenário")
-fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
-
-angles = [n / float(len(fatores_risco)) * 2 * 3.141593 for n in range(len(fatores_risco))]
-angles += angles[:1]
-
-for cenario in cenarios.keys():
-    valores = [fatores_risco[fator][cenario] for fator in fatores_risco]
-    valores += valores[:1]
-    ax.plot(angles, valores, linewidth=1, linestyle='solid', label=cenario)
-    ax.fill(angles, valores, alpha=0.1)
-
-ax.set_xticks(angles[:-1])
-ax.set_xticklabels(fatores_risco.keys())
-ax.set_ylim(0, 5)
-plt.legend(loc='upper right', bbox_to_anchor=(0.1, 0.1))
-
+# Gráfico de fluxo de caixa
+st.subheader("Fluxo de Caixa Acumulado")
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(np.cumsum(fluxo_caixa_auto), label="Auto Financiado")
+ax.plot(np.cumsum(fluxo_caixa_financiamento), label="Financiamento Tradicional")
+ax.plot(np.cumsum(fluxo_caixa_constructa), label="Constructa")
+ax.set_xlabel("Meses")
+ax.set_ylabel("Fluxo de Caixa Acumulado (milhões R$)")
+ax.legend()
 st.pyplot(fig)
 
 # Análise detalhada
 st.subheader("Análise Detalhada")
-st.write("""
-Após a atualização da matriz de risco, o cenário Constructa se destaca ainda mais:
+st.write(f"""
+Com base nos parâmetros fornecidos e considerando o fluxo de caixa {fluxo_caixa.lower()} da obra e a estrutura de recebíveis definida:
 
-1. Lucro e Margem: O Constructa mantém a liderança significativa em termos de lucro e margem.
-2. Capital Inicial: Requer um investimento inicial moderado, menor que o Financiamento Tradicional.
-3. Risco Total: Apresenta o menor risco total entre os três cenários, refletindo uma melhor gestão de riscos em várias dimensões.
-4. Destaques de Risco:
-   - Menor exposição a riscos de mercado, liquidez e crédito.
-   - Risco de taxa de juros significativamente menor que o Financiamento Tradicional.
-   - Risco de execução comparável ao Auto Financiado, graças ao suporte das administradoras de consórcio.
-   - Risco regulatório equalizado, refletindo a evolução positiva do setor de consórcios.
+1. O cenário Auto Financiado resulta em um lucro de R$ {lucro_auto:.2f} milhões, com uma margem de {(lucro_auto/vgv)*100:.2f}%.
 
-O Constructa oferece um equilíbrio atrativo entre alto retorno potencial e gestão eficiente de riscos, posicionando-se como uma opção valiosa para incorporadoras que buscam otimizar seus projetos imobiliários.
+2. O Financiamento Tradicional resulta em um lucro de R$ {lucro_financiamento:.2f} milhões, com uma margem de {(lucro_financiamento/vgv)*100:.2f}%.
+
+3. O modelo Constructa resulta em um lucro de R$ {lucro_constructa:.2f} milhões, com uma margem de {(lucro_constructa/vgv)*100:.2f}%.
+
+O modelo Constructa apresenta {
+    "o maior" if lucro_constructa > max(lucro_auto, lucro_financiamento) else "um"
+} lucro e margem entre os cenários analisados. 
+
+É importante notar que o Constructa requer um capital inicial de R$ {lance:.2f} milhões, 
+que é {
+    "menor" if lance < cenarios["Financiamento Tradicional"]["Capital Inicial"] else "maior"
+} que o requerido pelo Financiamento Tradicional (R$ {cenarios["Financiamento Tradicional"]["Capital Inicial"]:.2f} milhões) e {
+    "menor" if lance < cenarios["Auto Financiado"]["Capital Inicial"] else "maior"
+} que o Auto Financiado (R$ {cenarios["Auto Financiado"]["Capital Inicial"]:.2f} milhões).
+
+O fluxo de caixa {fluxo_caixa.lower()} da obra e a estrutura de recebíveis escolhida impactam significativamente o desempenho de cada modelo. 
+O gráfico de fluxo de caixa acumulado demonstra como cada cenário se comporta ao longo do tempo do projeto.
+
+A escolha entre os modelos deve considerar não apenas o retorno financeiro, 
+mas também o perfil de risco da incorporadora, as condições específicas do mercado e a capacidade de gestão do fluxo de caixa ao longo do projeto.
 """)
