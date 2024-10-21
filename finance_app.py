@@ -39,7 +39,7 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        principal = st.number_input("Valor do Crédito (R$)", min_value=10000, value=1800000, step=10000)
+        principal = st.number_input("Valor do Crédito (R$)", min_value=10000, value=5000000, step=10000)
         months = st.number_input("Prazo (meses)", min_value=12, value=210, step=12)
         admin_fee = st.number_input("Taxa de Administração Mensal (%)", min_value=0.1, value=0.12, step=0.01) / 100
         agio = st.number_input("Ágio dos Dropdowns (%)", min_value=0.0, value=25.0, step=1.0)
@@ -76,10 +76,12 @@ def main():
         st.write("KPIs")
         p_cl = payments_with_drops[0] / principal * 100
         p_dn = payments_with_drops[0] / (principal - sum(st.session_state.dropdowns.values())) * 100 if st.session_state.dropdowns else p_cl
-        cet = (sum(payments_with_drops) / principal - 1) * 100
+        cet_total = (sum(payments_with_drops) / principal - 1) * 100
+        cet_anual = ((1 + cet_total/100) ** (12/months) - 1) * 100
         st.metric("P/CL", f"{p_cl:.2f}%")
         st.metric("P/DN", f"{p_dn:.2f}%")
-        st.metric("CET", f"{cet:.2f}%")
+        st.metric("CET Total", f"{cet_total:.2f}%")
+        st.metric("CET Anual", f"{cet_anual:.2f}%")
 
     economia = sum(payments_no_drops[:last_dropdown_month]) - sum(payments_with_drops[:last_dropdown_month])
     st.metric("Economia até o Mês " + str(last_dropdown_month), f"R$ {economia:,.0f}", f"{economia/sum(payments_no_drops[:last_dropdown_month])*100:.2f}% de redução")
@@ -90,7 +92,12 @@ def main():
     with col1:
         dropdown_month = st.number_input("Mês do Dropdown", min_value=1, max_value=months, value=12)
     with col2:
-        dropdown_amount = st.number_input("Valor do Dropdown (R$)", min_value=0, max_value=int(balances_with_drops[dropdown_month]), value=10000, step=1000)
+        current_balance = balances_with_drops[dropdown_month] if dropdown_month < len(balances_with_drops) else balances_with_drops[-1]
+        dropdown_amount = st.number_input("Valor do Dropdown (R$)", 
+                                          min_value=0.0, 
+                                          max_value=float(current_balance), 
+                                          value=0.0,
+                                          step=1000.0)
     with col3:
         if st.button("Adicionar Dropdown"):
             st.session_state.dropdowns[dropdown_month] = dropdown_amount
