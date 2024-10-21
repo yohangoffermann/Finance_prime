@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import numpy as np
+import plotly.graph_objects as go
 
 def calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual):
     fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
