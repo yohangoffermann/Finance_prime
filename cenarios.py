@@ -47,12 +47,13 @@ def calcular_fluxo_caixa(params):
     custo_construcao = vgv * (params['custo_construcao_percentual'] / 100)
     unidades_totais = int(vgv / 0.5)  # Assumindo preço médio de 500 mil por unidade
 
-    fluxo = pd.DataFrame(index=range(meses), columns=['Receitas', 'Custos Construção', 'Despesas Marketing', 
-                                                      'Despesas Administrativas', 'Juros', 'Saldo'])
+    # Inicializar o DataFrame com zeros
+    fluxo = pd.DataFrame(0, index=range(meses), columns=['Receitas', 'Custos Construção', 'Despesas Marketing', 
+                                                         'Despesas Administrativas', 'Juros', 'Saldo'])
     
     # Vendas no pré-lançamento
     unidades_vendidas_pre = int(unidades_totais * params['percentual_vendas_pre_lancamento'] / 100)
-    fluxo.loc[0, 'Receitas'] = unidades_vendidas_pre * 0.5 * (params['entrada_percentual'] / 100)
+    fluxo.loc[0, 'Receitas'] += unidades_vendidas_pre * 0.5 * (params['entrada_percentual'] / 100)
     
     # Vendas durante a construção
     unidades_restantes = unidades_totais - unidades_vendidas_pre
@@ -61,17 +62,17 @@ def calcular_fluxo_caixa(params):
     for mes in range(meses_venda):
         unidades_vendidas = min(params['velocidade_vendas'], unidades_restantes)
         receita_mes = unidades_vendidas * 0.5
-        fluxo.loc[mes, 'Receitas'] = fluxo.loc[mes, 'Receitas'].fillna(0) + receita_mes * (params['entrada_percentual'] / 100)
+        fluxo.loc[mes, 'Receitas'] += receita_mes * (params['entrada_percentual'] / 100)
         
         # Balões
         for i, balao in enumerate(params['baloes']):
             mes_balao = int((i + 1) * meses / (len(params['baloes']) + 1))
-            fluxo.loc[mes_balao, 'Receitas'] = fluxo.loc[mes_balao, 'Receitas'].fillna(0) + receita_mes * (balao / 100)
+            fluxo.loc[mes_balao, 'Receitas'] += receita_mes * (balao / 100)
         
         # Parcelas
         valor_parcela = (receita_mes * (params['parcelas_percentual'] / 100)) / meses
         for m in range(mes, meses):
-            fluxo.loc[m, 'Receitas'] = fluxo.loc[m, 'Receitas'].fillna(0) + valor_parcela
+            fluxo.loc[m, 'Receitas'] += valor_parcela
         
         unidades_restantes -= unidades_vendidas
     
