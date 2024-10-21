@@ -85,8 +85,8 @@ def calculate_scenarios(params):
     }
 
 def display_results(results, params):
-    df = pd.DataFrame(results).T.reset_index()
-    df = df[df.index != "Detalhes Constructa"]
+    df = pd.DataFrame({k: v for k, v in results.items() if k != "Detalhes Constructa"}).T
+    df = df.reset_index()
     df.columns = ["Cenário", "Lucro", "Margem", "Capital Inicial"]
 
     # Visualizações
