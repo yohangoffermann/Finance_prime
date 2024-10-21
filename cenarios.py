@@ -4,9 +4,34 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.express as px
 
 # Configuração da página
 st.set_page_config(page_title="Análise de Fluxo de Caixa", layout="wide")
+
+# Tema personalizado
+st.markdown("""
+<style>
+    .reportview-container {
+        background: #f0f2f6
+    }
+    .sidebar .sidebar-content {
+        background: #ffffff
+    }
+    .Widget>label {
+        color: #262730;
+        font-family: sans-serif;
+    }
+    .stButton>button {
+        color: #ffffff;
+        background-color: #0083e8;
+        border-radius: 4px;
+    }
+    .stTextInput>div>div>input {
+        color: #262730;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses, 
                                    percentual_inicio, percentual_meio, percentual_fim,
@@ -42,23 +67,47 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     return fluxo
 
 def mostrar_graficos(fluxo):
-    fig = make_subplots(rows=2, cols=2, subplot_titles=("Receitas e Custos", "Fluxo de Caixa", "Saldo Acumulado", "Comparação"))
+    colors = px.colors.qualitative.Pastel
 
-    # Gráfico de Receitas e Custos
-    fig.add_trace(go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', marker_color='green'), row=1, col=1)
-    fig.add_trace(go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', marker_color='red'), row=1, col=1)
+    fig = make_subplots(rows=2, cols=2, 
+                        subplot_titles=("Receitas e Custos", "Fluxo de Caixa", 
+                                        "Saldo Acumulado", "Comparação"),
+                        vertical_spacing=0.1,
+                        horizontal_spacing=0.05)
 
-    # Gráfico de Fluxo de Caixa
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Mensal'], name='Saldo Mensal', mode='lines', line=dict(color='blue')), row=1, col=2)
+    fig.add_trace(go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', 
+                         marker_color=colors[0]), row=1, col=1)
+    fig.add_trace(go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', 
+                         marker_color=colors[1]), row=1, col=1)
 
-    # Gráfico de Saldo Acumulado
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', mode='lines+markers', line=dict(color='orange')), row=2, col=1)
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Mensal'], name='Saldo Mensal', 
+                             mode='lines', line=dict(color=colors[2])), row=1, col=2)
 
-    # Gráfico de Comparação
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', mode='lines', line=dict(color='green')), row=2, col=2)
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', mode='lines', line=dict(color='red')), row=2, col=2)
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', 
+                             mode='lines+markers', line=dict(color=colors[3])), row=2, col=1)
 
-    fig.update_layout(title_text="Análise de Fluxo de Caixa", height=800)
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', 
+                             mode='lines', line=dict(color=colors[0])), row=2, col=2)
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', 
+                             mode='lines', line=dict(color=colors[1])), row=2, col=2)
+
+    fig.update_layout(
+        title_text="Análise de Fluxo de Caixa",
+        height=800,
+        font=dict(family="Arial", size=12),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='lightgrey')
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='lightgrey')
+
+    for i in range(1, 3):
+        for j in range(1, 3):
+            fig.update_xaxes(title_text="Mês", row=i, col=j)
+            fig.update_yaxes(title_text="Valor (R$ milhões)", row=i, col=j)
+
     st.plotly_chart(fig, use_container_width=True)
 
 # Menu de navegação lateral
@@ -181,8 +230,7 @@ elif selected == "Análise":
         else:
             st.metric("Mês de Payback", mes_payback)
 
-    st.subheader('Análise Detalhada')
-    st.write(f"""
+        st.write(f"""
     No modelo auto financiado:
     1. O incorporador recebe R$ {st.session_state.vgv * st.session_state.percentual_lancamento / 100:.2f} milhões no lançamento.
     2. R$ {st.session_state.vgv * st.session_state.percentual_baloes / 100:.2f} milhões são recebidos em 3 balões ao longo do projeto.
@@ -195,6 +243,8 @@ elif selected == "Análise":
     6. O projeto atinge o ponto de equilíbrio (payback) no mês {mes_payback}{f', com um saldo positivo de R$ {valor_payback:.2f} milhões' if isinstance(mes_payback, int) else ''}.
     7. A margem final do projeto é de {margem:.2f}%.
     """)
+
+    mostrar_graficos(fluxo_auto)
 
 if __name__ == "__main__":
     st.sidebar.title("Sobre")
