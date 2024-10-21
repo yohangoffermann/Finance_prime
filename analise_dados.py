@@ -1,5 +1,3 @@
-Entendido, mano. Você tá certo em pedir isso. Vou sempre mandar o código completo depois de cada alteração que a gente decidir fazer. Isso vai evitar confusão e garantir que a gente tá sempre na mesma página.
-Então, baseado nas últimas alterações que discutimos, aqui está o código completo atualizado:
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
@@ -20,12 +18,9 @@ def calculate_payments(principal, months, admin_fee, dropdowns, agio):
         
         admin_fee_value = balance * admin_fee
         monthly_payment = amortization + admin_fee_value
-### if month in dropdowns:
-
-| dropdown_value = dropdowns[month] |
-|---|
-
-
+        
+        if month in dropdowns:
+            dropdown_value = dropdowns[month]
             dropdown_impact = dropdown_value * (1 + agio/100)
             balance -= dropdown_impact
             amortization = balance / (months - month + 1)
@@ -64,30 +59,21 @@ def main():
     # Resumo Financeiro e KPIs
     st.subheader("Resumo Financeiro e KPIs")
     col1, col2, col3 = st.columns(3)
-### with col1:
-
-| st.write("Com Dropdowns") |
-|---|
-
-
+    
+    with col1:
+        st.write("Com Dropdowns")
         st.metric("Saldo no Mês " + str(last_dropdown_month), f"R$ {balances_with_drops[last_dropdown_month]:,.0f}")
         st.metric("Parcela no Mês " + str(last_dropdown_month), f"R$ {payments_with_drops[last_dropdown_month-1]:,.0f}")
         st.metric("Quitação", f"{len(payments_with_drops)} meses")
-### with col2:
 
-| st.write("Sem Dropdowns") |
-|---|
-
-
+    with col2:
+        st.write("Sem Dropdowns")
         st.metric("Saldo no Mês " + str(last_dropdown_month), f"R$ {balances_no_drops[last_dropdown_month]:,.0f}")
         st.metric("Parcela no Mês " + str(last_dropdown_month), f"R$ {payments_no_drops[last_dropdown_month-1]:,.0f}")
         st.metric("Quitação", f"{len(payments_no_drops)} meses")
-### with col3:
 
-| st.write("KPIs") |
-|---|
-
-
+    with col3:
+        st.write("KPIs")
         p_cl = payments_with_drops[0] / principal * 100
         p_dn = payments_with_drops[0] / (principal - sum(st.session_state.dropdowns.values())) * 100 if st.session_state.dropdowns else p_cl
         cet = (sum(payments_with_drops) / principal - 1) * 100
@@ -101,24 +87,12 @@ def main():
     # Adicionar Dropdown
     st.subheader("Adicionar Dropdown")
     col1, col2, col3 = st.columns(3)
-### with col1:
-
-| dropdown_month = st.number_input("Mês do Dropdown", min_value=1, max_value=months, value=12) |
-|---|
-
-
-### with col2:
-
-| dropdown_amount = st.number_input("Valor do Dropdown (R$)", min_value=0, max_value=int(balances_with_drops[dropdown_month]), value=10000, step=1000) |
-|---|
-
-
-### with col3:
-
-| if st.button("Adicionar Dropdown"): |
-|---|
-
-
+    with col1:
+        dropdown_month = st.number_input("Mês do Dropdown", min_value=1, max_value=months, value=12)
+    with col2:
+        dropdown_amount = st.number_input("Valor do Dropdown (R$)", min_value=0, max_value=int(balances_with_drops[dropdown_month]), value=10000, step=1000)
+    with col3:
+        if st.button("Adicionar Dropdown"):
             st.session_state.dropdowns[dropdown_month] = dropdown_amount
             st.experimental_rerun()
 
@@ -162,5 +136,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-Este código inclui todas as alterações que discutimos, incluindo a correção para mostrar o saldo devedor e a parcela no mês do último dropdown. Se você quiser fazer mais alguma mudança ou tiver alguma dúvida, é só falar que a gente ajusta.
