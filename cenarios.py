@@ -11,14 +11,34 @@ st.title("Comparativo de Cenários de Incorporação Imobiliária")
 
 # Dados dos cenários
 cenarios = {
-    "Auto Financiado": {"Lucro": 10.5, "Margem": 30.00, "Capital Inicial": 5.25, "Risco": 2},
-    "Financiamento Tradicional": {"Lucro": 5.23, "Margem": 14.94, "Capital Inicial": 14.7, "Risco": 4},
-    "Constructa": {"Lucro": 21.03, "Margem": 60.09, "Capital Inicial": 6.125, "Risco": 3}
+    "Auto Financiado": {"Lucro": 10.5, "Margem": 30.00, "Capital Inicial": 5.25},
+    "Financiamento Tradicional": {"Lucro": 5.23, "Margem": 14.94, "Capital Inicial": 14.7},
+    "Constructa": {"Lucro": 21.03, "Margem": 60.09, "Capital Inicial": 6.125}
 }
 
-# Criando DataFrame
-df = pd.DataFrame(cenarios).T
-df = df.reset_index().rename(columns={"index": "Cenário"})
+# Matriz de risco atualizada
+fatores_risco = {
+    "Mercado": {"Auto Financiado": 3, "Financiamento Tradicional": 3, "Constructa": 2},
+    "Liquidez": {"Auto Financiado": 4, "Financiamento Tradicional": 3, "Constructa": 2},
+    "Crédito": {"Auto Financiado": 4, "Financiamento Tradicional": 3, "Constructa": 2},
+    "Taxa de Juros": {"Auto Financiado": 1, "Financiamento Tradicional": 5, "Constructa": 2},
+    "Operacional": {"Auto Financiado": 3, "Financiamento Tradicional": 3, "Constructa": 3},
+    "Financiamento": {"Auto Financiado": 2, "Financiamento Tradicional": 4, "Constructa": 3},
+    "Execução": {"Auto Financiado": 2, "Financiamento Tradicional": 3, "Constructa": 2},
+    "Regulatório": {"Auto Financiado": 2, "Financiamento Tradicional": 2, "Constructa": 2}
+}
+
+# Cálculo do risco total
+risco_total = {cenario: sum(fatores_risco[fator][cenario] for fator in fatores_risco) / len(fatores_risco) 
+               for cenario in cenarios.keys()}
+
+# Adicionar risco total ao dicionário de cenários
+for cenario, risco in risco_total.items():
+    cenarios[cenario]["Risco Total"] = risco
+
+# Criar DataFrame
+df = pd.DataFrame(cenarios).T.reset_index()
+df.columns = ["Cenário", "Lucro", "Margem", "Capital Inicial", "Risco Total"]
 
 # Gráfico de barras para Lucro e Margem
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
@@ -34,13 +54,13 @@ ax2.set_ylabel("Margem (%)")
 plt.tight_layout()
 st.pyplot(fig)
 
-# Gráfico de dispersão para Capital Inicial vs Risco
+# Gráfico de dispersão para Capital Inicial vs Risco Total
 fig, ax = plt.subplots(figsize=(10, 6))
-sns.scatterplot(x="Capital Inicial", y="Risco", hue="Cenário", size="Lucro", 
+sns.scatterplot(x="Capital Inicial", y="Risco Total", hue="Cenário", size="Lucro", 
                 sizes=(100, 1000), data=df, ax=ax, palette="viridis")
-ax.set_title("Capital Inicial vs Risco")
+ax.set_title("Capital Inicial vs Risco Total")
 ax.set_xlabel("Capital Inicial (milhões R$)")
-ax.set_ylabel("Risco (1-5)")
+ax.set_ylabel("Risco Total")
 plt.tight_layout()
 st.pyplot(fig)
 
@@ -48,28 +68,44 @@ st.pyplot(fig)
 st.subheader("Tabela Comparativa")
 st.table(df.set_index("Cenário"))
 
+# Matriz de risco detalhada
+st.subheader("Matriz de Risco Detalhada")
+risco_df = pd.DataFrame(fatores_risco)
+st.table(risco_df)
+
+# Gráfico de radar para comparação dos riscos
+st.subheader("Comparação de Riscos por Cenário")
+fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+
+angles = [n / float(len(fatores_risco)) * 2 * 3.141593 for n in range(len(fatores_risco))]
+angles += angles[:1]
+
+for cenario in cenarios.keys():
+    valores = [fatores_risco[fator][cenario] for fator in fatores_risco]
+    valores += valores[:1]
+    ax.plot(angles, valores, linewidth=1, linestyle='solid', label=cenario)
+    ax.fill(angles, valores, alpha=0.1)
+
+ax.set_xticks(angles[:-1])
+ax.set_xticklabels(fatores_risco.keys())
+ax.set_ylim(0, 5)
+plt.legend(loc='upper right', bbox_to_anchor=(0.1, 0.1))
+
+st.pyplot(fig)
+
 # Análise detalhada
 st.subheader("Análise Detalhada")
 st.write("""
-O cenário Constructa apresenta o maior lucro e margem, com um capital inicial moderado e um nível de risco intermediário. 
-O cenário Auto Financiado oferece um bom equilíbrio entre lucro, baixo risco e baixa necessidade de capital inicial. 
-O Financiamento Tradicional, embora requeira mais capital inicial, resulta no menor lucro e na menor margem, além de apresentar o maior risco.
+Após a atualização da matriz de risco, o cenário Constructa se destaca ainda mais:
+
+1. Lucro e Margem: O Constructa mantém a liderança significativa em termos de lucro e margem.
+2. Capital Inicial: Requer um investimento inicial moderado, menor que o Financiamento Tradicional.
+3. Risco Total: Apresenta o menor risco total entre os três cenários, refletindo uma melhor gestão de riscos em várias dimensões.
+4. Destaques de Risco:
+   - Menor exposição a riscos de mercado, liquidez e crédito.
+   - Risco de taxa de juros significativamente menor que o Financiamento Tradicional.
+   - Risco de execução comparável ao Auto Financiado, graças ao suporte das administradoras de consórcio.
+   - Risco regulatório equalizado, refletindo a evolução positiva do setor de consórcios.
+
+O Constructa oferece um equilíbrio atrativo entre alto retorno potencial e gestão eficiente de riscos, posicionando-se como uma opção valiosa para incorporadoras que buscam otimizar seus projetos imobiliários.
 """)
-
-# Slider para ajuste de parâmetros (exemplo)
-st.subheader("Simulação de Cenários")
-agio_constructa = st.slider("Ágio Constructa (%)", 0, 100, 47)
-taxa_juros_tradicional = st.slider("Taxa de Juros Financiamento Tradicional (% a.a.)", 5, 20, 12)
-
-# Recalcular resultados com base nos sliders
-lucro_constructa = 10.5 + (24.5 * agio_constructa / 100)
-margem_constructa = (lucro_constructa / 35) * 100
-
-juros_tradicional = 9.8 * ((1 + taxa_juros_tradicional/100)**4 - 1)
-lucro_tradicional = 35 - (24.5 + juros_tradicional)
-margem_tradicional = (lucro_tradicional / 35) * 100
-
-st.write(f"Lucro Constructa Ajustado: R$ {lucro_constructa:.2f} milhões")
-st.write(f"Margem Constructa Ajustada: {margem_constructa:.2f}%")
-st.write(f"Lucro Financiamento Tradicional Ajustado: R$ {lucro_tradicional:.2f} milhões")
-st.write(f"Margem Financiamento Tradicional Ajustada: {margem_tradicional:.2f}%")
