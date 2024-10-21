@@ -38,9 +38,9 @@ def calcular_fluxo_caixa(params):
     vgv = params['vgv']
     custo_obra = vgv * (params['custo_obra_percentual'] / 100)
 
-    fluxo = pd.DataFrame(index=range(meses), columns=['Receitas', 'Custos Obra', 'Saldo'])
+    fluxo = pd.DataFrame(0, index=range(meses), columns=['Receitas', 'Custos Obra', 'Saldo'])
     
-    # Receitas
+    # Entrada
     fluxo.loc[0, 'Receitas'] = vgv * (params['entrada_percentual'] / 100)
     
     # Balões
@@ -50,7 +50,8 @@ def calcular_fluxo_caixa(params):
     
     # Parcelas
     valor_parcela = (vgv * (params['parcelas_percentual'] / 100)) / meses
-    fluxo['Receitas'] = fluxo['Receitas'].fillna(valor_parcela)
+    for mes in range(meses):
+        fluxo.loc[mes, 'Receitas'] += valor_parcela
     
     # Custos da Obra (distribuição linear simplificada)
     fluxo['Custos Obra'] = custo_obra / meses
@@ -85,6 +86,27 @@ def display_results(fluxo_caixa, params):
     
     eficiencia_caixa = (fluxo_caixa['Saldo'] >= 0).mean() * 100
     st.write(f"Eficiência de Caixa: {eficiencia_caixa:.2f}% dos meses com saldo positivo")
+
+    # Análise adicional
+    st.subheader("Análise Adicional")
+    receita_total = fluxo_caixa['Receitas'].sum()
+    custo_total = fluxo_caixa['Custos Obra'].sum()
+    margem = (receita_total - custo_total) / receita_total * 100
+
+    st.write(f"Receita Total: R$ {receita_total:.2f} milhões")
+    st.write(f"Custo Total da Obra: R$ {custo_total:.2f} milhões")
+    st.write(f"Margem do Projeto: {margem:.2f}%")
+
+    if max_exposicao < 0:
+        st.write(f"Necessidade de Capital de Giro: R$ {abs(max_exposicao):.2f} milhões")
+        st.write("Considere estratégias para reduzir a exposição máxima de caixa, como negociar melhores condições de pagamento com fornecedores ou buscar financiamento para cobrir o período de exposição negativa.")
+    else:
+        st.write("O projeto não apresenta necessidade de capital de giro adicional.")
+
+    if meses_negativos > 0:
+        st.write(f"O projeto apresenta {meses_negativos} meses com fluxo de caixa negativo. Considere estratégias para melhorar o fluxo de caixa nesses períodos.")
+    else:
+        st.write("O projeto mantém fluxo de caixa positivo durante toda sua duração.")
 
 if __name__ == "__main__":
     main()
