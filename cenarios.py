@@ -152,6 +152,11 @@ def ferramenta_constructa(fluxo_caixa, params):
     # Comparar fluxos
     comparar_fluxos(fluxo_caixa, fluxo_otimizado)
 
+    # Informações adicionais de debug
+    st.write("Detalhes do Fluxo Otimizado:")
+    st.write(f"Soma das Receitas Consórcio: R$ {fluxo_otimizado['Receitas Consórcio'].sum():.2f} milhões")
+    st.write(f"Diferença entre Saldo Original e Otimizado no último mês: R$ {(fluxo_otimizado['Saldo Otimizado'].iloc[-1] - fluxo_caixa['Saldo'].iloc[-1]):.2f} milhões")
+
     return fluxo_otimizado
 
 def identificar_oportunidades_agio(fluxo_caixa, params, percentual_agio):
@@ -175,12 +180,19 @@ def simular_uso_consorcio(fluxo_caixa, oportunidades_agio, valor_consorcio):
     fluxo_otimizado['Receitas Consórcio'] = 0
     for _, oportunidade in oportunidades_agio.iterrows():
         mes = oportunidade['Mês']
+        agio = oportunidade['Potencial de Ágio']
+        
+        # Adicionar o ágio como receita adicional
+        fluxo_otimizado.loc[mes, 'Receitas Consórcio'] += agio
+        
+        # Usar o consórcio para cobrir saldo negativo, se necessário
         if fluxo_otimizado.loc[mes, 'Saldo'] < 0 and saldo_consorcio > 0:
             valor_utilizado = min(-fluxo_otimizado.loc[mes, 'Saldo'], saldo_consorcio)
-            fluxo_otimizado.loc[mes, 'Receitas Consórcio'] = valor_utilizado
+            fluxo_otimizado.loc[mes, 'Receitas Consórcio'] += valor_utilizado
             saldo_consorcio -= valor_utilizado
 
-    fluxo_otimizado['Saldo Otimizado'] = fluxo_otimizado['Saldo'] + fluxo_otimizado['Receitas Consórcio'].cumsum()
+    fluxo_otimizado['Saldo Otimizado'] = (fluxo_otimizado['Saldo'] + 
+                                          fluxo_otimizado['Receitas Consórcio'].cumsum())
 
     return fluxo_otimizado
 
@@ -188,19 +200,24 @@ def comparar_fluxos(fluxo_original, fluxo_otimizado):
     st.subheader("Comparação de Fluxos de Caixa")
 
     fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(fluxo_original.index, fluxo_original['Saldo'], label='Saldo Original')
-    ax.plot(fluxo_otimizado.index, fluxo_otimizado['Saldo Otimizado'], label='Saldo Otimizado')
+    ax.plot(fluxo_original.index, fluxo_original['Saldo'], label='Saldo Original', color='blue')
+    ax.plot(fluxo_otimizado.index, fluxo_otimizado['Saldo Otimizado'], label='Saldo Otimizado', color='red', linestyle='--')
     ax.set_xlabel('Meses')
     ax.set_ylabel('Valor (R$ milhões)')
     ax.legend()
+    plt.tight_layout()
     st.pyplot(fig)
 
-    melhoria_exposicao = fluxo_original['Saldo'].min() - fluxo_otimizado['Saldo Otimizado'].min()
+    melhoria_exposicao = fluxo_otimizado['Saldo Otimizado'].min() - fluxo_original['Saldo'].min()
     st.write(f"Melhoria na Exposição Máxima de Caixa: R$ {melhoria_exposicao:.2f} milhões")
 
     meses_negativos_original = (fluxo_original['Saldo'] < 0).sum()
     meses_negativos_otimizado = (fluxo_otimizado['Saldo Otimizado'] < 0).sum()
     st.write(f"Redução de Meses com Caixa Negativo: {meses_negativos_original - meses_negativos_otimizado}")
+
+    # Adicionar informações sobre o ágio total gerado
+    agio_total = fluxo_otimizado['Receitas Consórcio'].sum()
+    st.write(f"Ágio Total Gerado: R$ {agio_total:.2f} milhões")
 
 if __name__ == "__main__":
     main()
