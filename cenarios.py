@@ -80,11 +80,11 @@ lucro_financiamento = lucro_operacional - juros_financiamento
 # Cenário Constructa
 lance = custo_construcao * (lance_consorcio / 100)
 rendimento_selic = lance * ((1 + taxa_selic/100)**(prazo_meses/12) - 1)
-custo_consorcio = custo_construcao * ((1 + incc/100)**(prazo_meses/12) - 1) - custo_construcao
+custo_consorcio = custo_construcao * ((1 + incc/100)**(prazo_meses/12) - 1)
 
 # Calcular total de pagamentos parciais e ágio necessário
 total_pagamentos_parciais = (entrada_percentual + balao_percentual + parcelas_percentual) * vgv / 100
-agio_necessario = vgv - (custo_construcao + total_pagamentos_parciais)
+agio_necessario = max(0, vgv - (custo_construcao + total_pagamentos_parciais))
 percentual_agio = (agio_necessario / custo_construcao) * 100
 
 # Exibir o percentual de ágio calculado
@@ -97,7 +97,13 @@ if modelo_pagamento_constructa == "Pagamento na Transferência do Consórcio":
 else:
     agio = custo_construcao * (agio_consorcio / 100)
 
-lucro_constructa = lucro_operacional + rendimento_selic + agio + total_pagamentos_parciais - custo_consorcio
+# Logs para depuração
+st.sidebar.write(f"Lucro Operacional: {lucro_operacional:.2f}")
+st.sidebar.write(f"Rendimento Selic: {rendimento_selic:.2f}")
+st.sidebar.write(f"Ágio: {agio:.2f}")
+st.sidebar.write(f"Custo Consórcio: {custo_consorcio:.2f}")
+
+lucro_constructa = lucro_operacional + rendimento_selic + agio - custo_consorcio
 
 # Criando DataFrame com os resultados
 cenarios = {
