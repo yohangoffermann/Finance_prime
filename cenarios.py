@@ -8,13 +8,8 @@ def main():
     st.set_page_config(page_title="Comparativo de Cenários de Incorporação", layout="wide")
     st.title("Comparativo de Cenários de Incorporação Imobiliária")
 
-    # Inputs do usuário
     params = get_user_inputs()
-
-    # Cálculos
     results = calculate_scenarios(params)
-
-    # Visualizações
     display_results(results, params)
 
 def get_user_inputs():
@@ -80,7 +75,9 @@ def calculate_scenarios(params):
             "Saldo Devedor Consórcio": saldo_devedor_consorcio,
             "Saldo Assumido Cliente": saldo_assumido_cliente,
             "Ágio": agio,
-            "Percentual Ágio": percentual_agio
+            "Percentual Ágio": percentual_agio,
+            "Rendimento Selic": rendimento_selic,
+            "Custo Consórcio": custo_consorcio
         }
     }
 
@@ -108,7 +105,10 @@ def display_results(results, params):
     st.subheader("Detalhes do Cenário Constructa")
     detalhes = results["Detalhes Constructa"]
     for key, value in detalhes.items():
-        st.write(f"{key}: R$ {value:.2f} milhões")
+        if key == "Percentual Ágio":
+            st.write(f"{key}: {value:.2f}%")
+        else:
+            st.write(f"{key}: R$ {value:.2f} milhões")
 
     # Análise detalhada
     st.subheader("Análise Detalhada")
@@ -118,6 +118,7 @@ def write_analysis(results, params):
     auto = results["Auto Financiado"]
     financiamento = results["Financiamento Tradicional"]
     constructa = results["Constructa"]
+    detalhes = results["Detalhes Constructa"]
     
     st.write(f"""
     Com base nos parâmetros fornecidos:
@@ -128,21 +129,30 @@ def write_analysis(results, params):
 
     3. O modelo Constructa resulta em um lucro de R$ {constructa['Lucro']:.2f} milhões, com uma margem de {constructa['Margem']:.2f}%.
 
+    Detalhes do Constructa:
+    - Valor pago pelo cliente: R$ {detalhes['Valor Pago Cliente']:.2f} milhões
+    - Saldo devedor do consórcio: R$ {detalhes['Saldo Devedor Consórcio']:.2f} milhões
+    - Ágio: R$ {detalhes['Ágio']:.2f} milhões ({detalhes['Percentual Ágio']:.2f}% do custo de construção)
+    - Rendimento Selic: R$ {detalhes['Rendimento Selic']:.2f} milhões
+    - Custo do Consórcio: R$ {detalhes['Custo Consórcio']:.2f} milhões
+
     O modelo de pagamento escolhido para o Constructa foi "{params['modelo_pagamento_constructa']}".
     
-    O modelo Constructa apresenta {
-        "o maior" if constructa['Lucro'] > max(auto['Lucro'], financiamento['Lucro']) else "um"
-    } lucro e margem entre os cenários analisados. 
-
-    É importante notar que o Constructa requer um capital inicial de R$ {constructa['Capital Inicial']:.2f} milhões, 
-    que é {
-        "menor" if constructa['Capital Inicial'] < financiamento['Capital Inicial'] else "maior"
-    } que o requerido pelo Financiamento Tradicional (R$ {financiamento['Capital Inicial']:.2f} milhões) e {
-        "menor" if constructa['Capital Inicial'] < auto['Capital Inicial'] else "maior"
-    } que o Auto Financiado (R$ {auto['Capital Inicial']:.2f} milhões).
+    Comparação:
+    - O Constructa apresenta uma margem {constructa['Margem'] - financiamento['Margem']:.2f} pontos percentuais maior que o Financiamento Tradicional.
+    - O Constructa requer um capital inicial R$ {financiamento['Capital Inicial'] - constructa['Capital Inicial']:.2f} milhões menor que o Financiamento Tradicional.
+    - Em relação ao Auto Financiado, o Constructa tem uma margem {auto['Margem'] - constructa['Margem']:.2f} pontos percentuais menor, mas requer apenas R$ {constructa['Capital Inicial']:.2f} milhões de capital inicial.
 
     A escolha entre os modelos deve considerar não apenas o retorno financeiro, 
     mas também o perfil de risco da incorporadora, as condições específicas do mercado e a capacidade de gestão do fluxo de caixa ao longo do projeto.
+
+    Pontos-chave do modelo Constructa:
+    1. Menor necessidade de capital inicial comparado ao Financiamento Tradicional.
+    2. Potencial de ganho adicional através do ágio e rendimento Selic.
+    3. Maior flexibilidade na estruturação financeira do projeto.
+    4. Possibilidade de oferecer condições diferenciadas aos compradores.
+
+    O modelo escolhido deve estar alinhado com a estratégia global da incorporadora e as condições específicas de cada projeto.
     """)
 
 if __name__ == "__main__":
