@@ -49,7 +49,7 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     custos[2*tercio_obra:] = custo_construcao * percentual_fim / 100 / (prazo_meses - 2*tercio_obra)
     fluxo['Custos'] = custos
     
-    # Distribuição das receitas
+    # Inicializar receitas
     fluxo['Receitas'] = 0
     
     # Lançamento
@@ -67,13 +67,14 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     parcela_mensal = valor_parcelas / min(prazo_parcelas, prazo_meses)
     fluxo.loc[:min(prazo_parcelas, prazo_meses)-1, 'Receitas'] += parcela_mensal
     
+    # Cálculo do saldo mensal e acumulado
     fluxo['Saldo Mensal'] = fluxo['Receitas'] - fluxo['Custos']
     fluxo['Saldo Acumulado'] = fluxo['Saldo Mensal'].cumsum()
     
     fluxo['Mês'] = range(1, prazo_meses + 1)
     
     return fluxo
-
+                                       
 def mostrar_grafico(fluxo):
     fig = go.Figure()
     
@@ -95,8 +96,8 @@ def mostrar_grafico(fluxo):
         x=fluxo['Mês'], 
         y=fluxo['Saldo Acumulado'], 
         name='Saldo Acumulado', 
-        mode='lines+markers',  # Adicionando marcadores
-        line=dict(color='blue', width=3),  # Aumentando a espessura
+        mode='lines+markers', 
+        line=dict(color='blue', width=3),
         yaxis='y2'
     ))
     
