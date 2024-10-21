@@ -7,76 +7,139 @@ def main():
     st.title("Comparativo de Cenários de Incorporação Imobiliária")
 
     # Inputs do usuário
-    vgv = st.sidebar.number_input("VGV (milhões R$)", value=35.0, step=0.1)
+    vgv = st.sidebar.number_input("VGV (milhões R$)", value=50.0, step=0.1)
     custo_obra_percentual = st.sidebar.slider("Custo da Obra (% do VGV)", 50, 90, 70)
     prazo_meses = st.sidebar.number_input("Prazo de Construção (meses)", value=48, step=1)
     taxa_selic = st.sidebar.number_input("Taxa Selic (% a.a.)", value=11.0, step=0.1)
+    incc = st.sidebar.number_input("INCC (% a.a.)", value=6.0, step=0.1)
     taxa_financiamento = st.sidebar.number_input("Taxa de Financiamento (% a.a.)", value=12.0, step=0.1)
-    percentual_financiado = st.sidebar.slider("Percentual Financiado", 20, 80, 40)
-    lance_consorcio = st.sidebar.slider("Lance do Consórcio (%)", 20, 40, 25)
-    agio_consorcio = st.sidebar.slider("Ágio do Consórcio na Venda (%)", 20, 60, 40)
+    percentual_financiado = st.sidebar.slider("Percentual Financiado", 20, 80, 60)
+    lance_consorcio = st.sidebar.slider("Lance do Consórcio (%)", 20, 40, 30)
+    agio_consorcio = st.sidebar.slider("Ágio do Consórcio na Venda (%)", 10, 50, 20)
 
     # Cálculos
     custo_obra = vgv * (custo_obra_percentual / 100)
-    lucro_operacional = vgv - custo_obra
+    
+    # Fluxo de vendas simplificado
+    entrada = vgv * 0.2  # 20% de entrada
+    vendas_mensais = (vgv * 0.8) / prazo_meses  # Resto distribuído igualmente
 
     # Cenário Auto Financiado
-    lucro_auto = lucro_operacional
-
+    fluxo_auto = calcular_fluxo_auto(vgv, custo_obra, prazo_meses, entrada, vendas_mensais)
+    
     # Cenário Financiamento Tradicional
-    valor_financiado = custo_obra * (percentual_financiado / 100)
-    juros_financiamento = valor_financiado * ((1 + taxa_financiamento/100)**(prazo_meses/12) - 1)
-    lucro_financiamento = lucro_operacional - juros_financiamento
-
+    fluxo_financiamento = calcular_fluxo_financiamento(vgv, custo_obra, prazo_meses, entrada, vendas_mensais, 
+                                                       percentual_financiado, taxa_financiamento)
+    
     # Cenário Constructa
+    fluxo_constructa = calcular_fluxo_constructa(vgv, custo_obra, prazo_meses, entrada, vendas_mensais, 
+                                                 lance_consorcio, agio_consorcio, taxa_selic, incc)
+
+    # Exibir resultados
+    exibir_graficos(fluxo_auto, fluxo_financiamento, fluxo_constructa)
+    exibir_metricas(fluxo_auto, fluxo_financiamento, fluxo_constructa, vgv)
+
+def calcular_fluxo_auto(vgv, custo_obra, prazo_meses, entrada, vendas_mensais):
+    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
+    fluxo.loc[0, 'Receitas'] = entrada
+    fluxo.loc[1:, 'Receitas'] = vendas_mensais
+    fluxo['Custos'] = custo_obra / prazo_meses
+    fluxo['Saldo'] = (fluxo['Receitas'] - fluxo['Custos']).cumsum()
+    return fluxo
+
+def calcular_fluxo_financiamento(vgv, custo_obra, prazo_meses, entrada, vendas_mensais, percentual_financiado, taxa_financiamento):
+    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
+    fluxo.loc[0, 'Receitas'] = entrada
+    fluxo.loc[1:, 'Receitas'] = vendas_mensais
+    
+    valor_financiado = custo_obra * (percentual_financiado / 100)
+    juros_totais = valor_financiado * ((1 + taxa_financiamento/100)**(prazo_meses/12) - 1)
+    
+    fluxo['Custos'] = custo_obra / prazo_meses
+    fluxo.loc[prazo_meses-1, 'Custos'] += valor_financiado + juros_totais
+    
+    fluxo.loc[0, 'Saldo'] = valor_financiado + entrada - fluxo.loc[0, 'Custos']
+    for i in range(1, prazo_meses):
+        fluxo.loc[i, 'Saldo'] = fluxo.loc[i-1, 'Saldo'] + fluxo.loc[i, 'Receitas'] - fluxo.loc[i, 'Custos']
+    
+    return fluxo
+
+def calcular_fluxo_constructa(vgv, custo_obra, prazo_meses, entrada, vendas_mensais, lance_consorcio, agio_consorcio, taxa_selic, incc):
+    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
+    
     lance = custo_obra * (lance_consorcio / 100)
+    credito_contemplado = custo_obra - lance
     rendimento_selic = lance * ((1 + taxa_selic/100)**(prazo_meses/12) - 1)
-    custo_consorcio = custo_obra * ((1 + taxa_selic/100)**(prazo_meses/12) - 1)
-    agio = custo_obra * (agio_consorcio / 100)
-    lucro_constructa = lucro_operacional + rendimento_selic + agio - custo_consorcio
+    custo_consorcio = custo_obra * ((1 + incc/100)**(prazo_meses/12) - 1)
+    
+    fluxo.loc[0, 'Receitas'] = entrada + credito_contemplado
+    fluxo.loc[1:, 'Receitas'] = vendas_mensais * (1 + agio_consorcio/100)
+    fluxo.loc[prazo_meses-1, 'Receitas'] += rendimento_selic
+    
+    fluxo['Custos'] = (custo_obra + custo_consorcio) / prazo_meses
+    
+    fluxo.loc[0, 'Saldo'] = fluxo.loc[0, 'Receitas'] - lance - fluxo.loc[0, 'Custos']
+    for i in range(1, prazo_meses):
+        fluxo.loc[i, 'Saldo'] = fluxo.loc[i-1, 'Saldo'] + fluxo.loc[i, 'Receitas'] - fluxo.loc[i, 'Custos']
+    
+    return fluxo
 
-    # Criando DataFrame com os resultados
-    cenarios = {
-        "Auto Financiado": {"Lucro": lucro_auto, "Margem": (lucro_auto/vgv)*100, "Capital Inicial": custo_obra},
-        "Financiamento Tradicional": {"Lucro": lucro_financiamento, "Margem": (lucro_financiamento/vgv)*100, "Capital Inicial": custo_obra - valor_financiado},
-        "Constructa": {"Lucro": lucro_constructa, "Margem": (lucro_constructa/vgv)*100, "Capital Inicial": lance}
-    }
-
-    df = pd.DataFrame(cenarios).T
-    st.table(df.round(2))
-
-    # Gráfico de barras comparativo
-    fig, ax = plt.subplots(figsize=(10, 6))
-    df['Lucro'].plot(kind='bar', ax=ax)
-    ax.set_ylabel('Lucro (milhões R$)')
-    ax.set_title('Comparativo de Lucro por Cenário')
+def exibir_graficos(fluxo_auto, fluxo_financiamento, fluxo_constructa):
+    st.subheader("Fluxo de Caixa ao Longo do Tempo")
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(fluxo_auto.index, fluxo_auto['Saldo'], label='Auto Financiado')
+    ax.plot(fluxo_financiamento.index, fluxo_financiamento['Saldo'], label='Financiamento Tradicional')
+    ax.plot(fluxo_constructa.index, fluxo_constructa['Saldo'], label='Constructa')
+    ax.set_xlabel('Meses')
+    ax.set_ylabel('Saldo (milhões R$)')
+    ax.legend()
     st.pyplot(fig)
 
-    # Análise detalhada
-    st.subheader("Análise Detalhada")
-    st.write(f"""
-    Com base nos parâmetros fornecidos:
+    st.subheader("Lucro Final por Cenário")
+    
+    lucros = {
+        'Auto Financiado': fluxo_auto['Saldo'].iloc[-1],
+        'Financiamento Tradicional': fluxo_financiamento['Saldo'].iloc[-1],
+        'Constructa': fluxo_constructa['Saldo'].iloc[-1]
+    }
+    
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar(lucros.keys(), lucros.values())
+    ax.set_ylabel('Lucro (milhões R$)')
+    for i, v in enumerate(lucros.values()):
+        ax.text(i, v, f'{v:.2f}', ha='center', va='bottom')
+    st.pyplot(fig)
 
-    1. O cenário Auto Financiado resulta em um lucro de R$ {lucro_auto:.2f} milhões, com uma margem de {(lucro_auto/vgv)*100:.2f}%.
-
-    2. O Financiamento Tradicional resulta em um lucro de R$ {lucro_financiamento:.2f} milhões, com uma margem de {(lucro_financiamento/vgv)*100:.2f}%.
-
-    3. O modelo Constructa resulta em um lucro de R$ {lucro_constructa:.2f} milhões, com uma margem de {(lucro_constructa/vgv)*100:.2f}%.
-
-    O modelo Constructa apresenta {
-        "o maior" if lucro_constructa > max(lucro_auto, lucro_financiamento) else "um"
-    } lucro e margem entre os cenários analisados. 
-
-    É importante notar que o Constructa requer um capital inicial de R$ {lance:.2f} milhões, 
-    que é {
-        "menor" if lance < cenarios["Financiamento Tradicional"]["Capital Inicial"] else "maior"
-    } que o requerido pelo Financiamento Tradicional (R$ {cenarios["Financiamento Tradicional"]["Capital Inicial"]:.2f} milhões) e {
-        "menor" if lance < cenarios["Auto Financiado"]["Capital Inicial"] else "maior"
-    } que o Auto Financiado (R$ {cenarios["Auto Financiado"]["Capital Inicial"]:.2f} milhões).
-
-    A escolha entre os modelos deve considerar não apenas o retorno financeiro, 
-    mas também o perfil de risco da incorporadora, as condições específicas do mercado e a capacidade de gestão do fluxo de caixa ao longo do projeto.
-    """)
+def exibir_metricas(fluxo_auto, fluxo_financiamento, fluxo_constructa, vgv):
+    st.subheader("Métricas Comparativas")
+    
+    metricas = {
+        'Cenário': ['Auto Financiado', 'Financiamento Tradicional', 'Constructa'],
+        'Lucro Final (milhões R$)': [
+            fluxo_auto['Saldo'].iloc[-1],
+            fluxo_financiamento['Saldo'].iloc[-1],
+            fluxo_constructa['Saldo'].iloc[-1]
+        ],
+        'Margem (%)': [
+            (fluxo_auto['Saldo'].iloc[-1] / vgv) * 100,
+            (fluxo_financiamento['Saldo'].iloc[-1] / vgv) * 100,
+            (fluxo_constructa['Saldo'].iloc[-1] / vgv) * 100
+        ],
+        'Capital Inicial (milhões R$)': [
+            -fluxo_auto['Saldo'].min(),
+            -fluxo_financiamento['Saldo'].min(),
+            -fluxo_constructa['Saldo'].min()
+        ],
+        'Exposição Máxima (milhões R$)': [
+            -fluxo_auto['Saldo'].min(),
+            -fluxo_financiamento['Saldo'].min(),
+            -fluxo_constructa['Saldo'].min()
+        ]
+    }
+    
+    df_metricas = pd.DataFrame(metricas).set_index('Cenário')
+    st.table(df_metricas.round(2))
 
 if __name__ == "__main__":
     main()
