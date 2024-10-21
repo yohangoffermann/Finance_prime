@@ -1,52 +1,8 @@
+# Funções Compartilhadas
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-
-def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual):
-    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Mês', 'Receitas', 'Custos', 'Saldo Mensal', 'Saldo Acumulado'])
-    
-    fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
-    receita_mensal = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
-    fluxo['Receitas'].iloc[1:] = receita_mensal
-    
-    fluxo['Custos'] = custo_construcao / prazo_meses
-    
-    fluxo['Saldo Mensal'] = fluxo['Receitas'] - fluxo['Custos']
-    fluxo['Saldo Acumulado'] = fluxo['Saldo Mensal'].cumsum()
-    
-    fluxo['Mês'] = range(1, prazo_meses + 1)
-    
-    return fluxo
-
-def calcular_fluxo_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual, percentual_financiado, taxa_juros_anual):
-    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Mês', 'Receitas', 'Custos', 'Financiamento', 'Juros', 'Saldo Mensal', 'Saldo Acumulado'])
-    
-    fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
-    receita_mensal = (vgv * (1-entrada_percentual)) / (prazo_meses - 1)
-    fluxo['Receitas'].iloc[1:] = receita_mensal
-    
-    fluxo['Custos'] = custo_construcao / prazo_meses
-    
-    valor_financiado = custo_construcao * percentual_financiado
-    fluxo.loc[0, 'Financiamento'] = valor_financiado
-    
-    taxa_juros_mensal = (1 + taxa_juros_anual) ** (1/12) - 1
-    parcela_financiamento = valor_financiado * (taxa_juros_mensal * (1 + taxa_juros_mensal) ** prazo_meses) / ((1 + taxa_juros_mensal) ** prazo_meses - 1)
-    
-    saldo_devedor = valor_financiado
-    for mes in range(prazo_meses):
-        juros = saldo_devedor * taxa_juros_mensal
-        amortizacao = parcela_financiamento - juros
-        fluxo.loc[mes, 'Juros'] = juros
-        fluxo.loc[mes, 'Custos'] += parcela_financiamento
-        saldo_devedor -= amortizacao
-    
-    fluxo['Saldo Mensal'] = fluxo['Receitas'] + fluxo['Financiamento'] - fluxo['Custos']
-    fluxo['Saldo Acumulado'] = fluxo['Saldo Mensal'].cumsum()
-    
-    fluxo['Mês'] = range(1, prazo_meses + 1)
-    
-    return fluxo
 
 def mostrar_metricas(fluxo, vgv, custo_construcao, is_financiado=False):
     if is_financiado:
@@ -89,11 +45,25 @@ def mostrar_grafico(fluxo):
 
     st.plotly_chart(fig)
 
-st.title('Análise de Fluxo de Caixa - Modelos de Incorporação')
+# Aba Auto Financiado
 
-tab1, tab2 = st.tabs(["Auto Financiado", "Financiamento Tradicional"])
+def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual):
+    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Mês', 'Receitas', 'Custos', 'Saldo Mensal', 'Saldo Acumulado'])
+    
+    fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
+    receita_mensal = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
+    fluxo['Receitas'].iloc[1:] = receita_mensal
+    
+    fluxo['Custos'] = custo_construcao / prazo_meses
+    
+    fluxo['Saldo Mensal'] = fluxo['Receitas'] - fluxo['Custos']
+    fluxo['Saldo Acumulado'] = fluxo['Saldo Mensal'].cumsum()
+    
+    fluxo['Mês'] = range(1, prazo_meses + 1)
+    
+    return fluxo
 
-with tab1:
+def aba_auto_financiado():
     st.header("Modelo Auto Financiado")
     
     vgv = st.number_input('VGV (Valor Geral de Vendas) em milhões R$', value=35.0, step=0.1, key='vgv_auto')
@@ -122,7 +92,85 @@ with tab1:
     6. Não há custos financeiros adicionais (como juros de financiamento), o que contribui para uma margem mais alta de {(fluxo_auto['Saldo Mensal'].sum() / vgv) * 100:.2f}%.
     """)
 
-with tab2:
+# Aba Auto Financiado
+
+def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual):
+    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Mês', 'Receitas', 'Custos', 'Saldo Mensal', 'Saldo Acumulado'])
+    
+    fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
+    receita_mensal = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
+    fluxo['Receitas'].iloc[1:] = receita_mensal
+    
+    fluxo['Custos'] = custo_construcao / prazo_meses
+    
+    fluxo['Saldo Mensal'] = fluxo['Receitas'] - fluxo['Custos']
+    fluxo['Saldo Acumulado'] = fluxo['Saldo Mensal'].cumsum()
+    
+    fluxo['Mês'] = range(1, prazo_meses + 1)
+    
+    return fluxo
+
+def aba_auto_financiado():
+    st.header("Modelo Auto Financiado")
+    
+    vgv = st.number_input('VGV (Valor Geral de Vendas) em milhões R$', value=35.0, step=0.1, key='vgv_auto')
+    custo_construcao_percentual = st.slider('Custo de Construção (% do VGV)', 50, 90, 70, key='custo_auto')
+    prazo_meses = st.number_input('Prazo de Construção (meses)', value=48, step=1, key='prazo_auto')
+    entrada_percentual = st.slider('Entrada (%)', 10, 50, 30, key='entrada_auto') / 100
+
+    custo_construcao = vgv * custo_construcao_percentual / 100
+    fluxo_auto = calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual)
+
+    st.subheader('Fluxo de Caixa Mensal')
+    st.dataframe(fluxo_auto)
+
+    mostrar_grafico(fluxo_auto)
+    mostrar_metricas(fluxo_auto, vgv, custo_construcao)
+
+    receita_mensal = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
+    st.subheader('Análise')
+    st.write(f"""
+    No modelo auto financiado:
+    1. O incorporador recebe R$ {vgv * entrada_percentual:.2f} milhões de entrada.
+    2. O restante (R$ {vgv * (1-entrada_percentual):.2f} milhões) é recebido em {prazo_meses-1} parcelas mensais de R$ {receita_mensal:.2f} milhões.
+    3. Os custos de construção são distribuídos igualmente ao longo de {prazo_meses} meses, sendo R$ {custo_construcao / prazo_meses:.2f} milhões por mês.
+    4. A exposição máxima de caixa é de R$ {-fluxo_auto['Saldo Acumulado'].min():.2f} milhões, ocorrendo no início do projeto.
+    5. O projeto atinge o ponto de equilíbrio (payback) no mês {fluxo_auto[fluxo_auto['Saldo Acumulado'] > 0].index[0] + 1 if any(fluxo_auto['Saldo Acumulado'] > 0) else "Não atingido"}.
+    6. Não há custos financeiros adicionais (como juros de financiamento), o que contribui para uma margem mais alta de {(fluxo_auto['Saldo Mensal'].sum() / vgv) * 100:.2f}%.
+    """)
+    # Aba Financiamento Tradicional
+
+def calcular_fluxo_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual, percentual_financiado, taxa_juros_anual):
+    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Mês', 'Receitas', 'Custos', 'Financiamento', 'Juros', 'Saldo Mensal', 'Saldo Acumulado'])
+    
+    fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
+    receita_mensal = (vgv * (1-entrada_percentual)) / (prazo_meses - 1)
+    fluxo['Receitas'].iloc[1:] = receita_mensal
+    
+    fluxo['Custos'] = custo_construcao / prazo_meses
+    
+    valor_financiado = custo_construcao * percentual_financiado
+    fluxo.loc[0, 'Financiamento'] = valor_financiado
+    
+    taxa_juros_mensal = (1 + taxa_juros_anual) ** (1/12) - 1
+    parcela_financiamento = valor_financiado * (taxa_juros_mensal * (1 + taxa_juros_mensal) ** prazo_meses) / ((1 + taxa_juros_mensal) ** prazo_meses - 1)
+    
+    saldo_devedor = valor_financiado
+    for mes in range(prazo_meses):
+        juros = saldo_devedor * taxa_juros_mensal
+        amortizacao = parcela_financiamento - juros
+        fluxo.loc[mes, 'Juros'] = juros
+        fluxo.loc[mes, 'Custos'] += parcela_financiamento
+        saldo_devedor -= amortizacao
+    
+    fluxo['Saldo Mensal'] = fluxo['Receitas'] + fluxo['Financiamento'].fillna(0) - fluxo['Custos']
+    fluxo['Saldo Acumulado'] = fluxo['Saldo Mensal'].cumsum()
+    
+    fluxo['Mês'] = range(1, prazo_meses + 1)
+    
+    return fluxo
+
+def aba_financiamento_tradicional():
     st.header("Modelo com Financiamento Tradicional")
     
     vgv = st.number_input('VGV (Valor Geral de Vendas) em milhões R$', value=35.0, step=0.1, key='vgv_fin')
@@ -157,3 +205,18 @@ with tab2:
     7. O projeto atinge o ponto de equilíbrio (payback) no mês {fluxo_financiado[fluxo_financiado['Saldo Acumulado'] > 0].index[0] + 1 if any(fluxo_financiado['Saldo Acumulado'] > 0) else "Não atingido"}.
     8. Este modelo reduz a necessidade de capital próprio inicial, mas impacta a margem final devido aos juros, resultando em uma margem de {((fluxo_financiado['Receitas'].sum() - fluxo_financiado['Custos'].sum()) / vgv) * 100:.2f}%.
     """)
+    # Código Principal (main)
+
+def main():
+    st.title('Análise de Fluxo de Caixa - Modelos de Incorporação')
+
+    tab1, tab2 = st.tabs(["Auto Financiado", "Financiamento Tradicional"])
+
+    with tab1:
+        aba_auto_financiado()
+
+    with tab2:
+        aba_financiamento_tradicional()
+
+if __name__ == "__main__":
+    main()
