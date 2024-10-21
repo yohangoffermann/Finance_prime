@@ -64,31 +64,23 @@ fluxo_recebiveis = gerar_recebíveis(prazo_meses, entrada_percentual/100, balao_
                                     parcelas_percentual/100, num_baloes)
 
 # Cenário Auto Financiado
-fluxo_caixa_auto = fluxo_recebiveis * vgv - fluxo_obra * custo_construcao
-lucro_auto = np.sum(fluxo_caixa_auto)
+lucro_auto = lucro_operacional
 
 # Cenário Financiamento Tradicional
 valor_financiado = custo_construcao * (percentual_financiado / 100)
 juros_financiamento = valor_financiado * ((1 + taxa_financiamento/100)**(prazo_meses/12) - 1)
-fluxo_caixa_financiamento = fluxo_caixa_auto.copy()
-fluxo_caixa_financiamento[0] += valor_financiado
-fluxo_caixa_financiamento[-1] -= (valor_financiado + juros_financiamento)
-lucro_financiamento = np.sum(fluxo_caixa_financiamento)
+lucro_financiamento = lucro_operacional - juros_financiamento
 
 # Cenário Constructa
 lance = custo_construcao * (lance_consorcio / 100)
 rendimento_selic = lance * ((1 + taxa_selic/100)**(prazo_meses/12) - 1)
-custo_consorcio = custo_construcao * ((1 + incc/100)**(prazo_meses/12) - 1)
+custo_consorcio = custo_construcao * ((1 + incc/100)**(prazo_meses/12) - 1) - custo_construcao
 agio = custo_construcao * (agio_consorcio / 100)
-fluxo_caixa_constructa = fluxo_caixa_auto.copy()
-fluxo_caixa_constructa[0] -= lance
-fluxo_caixa_constructa += fluxo_obra * (custo_construcao / prazo_meses)  # Adiciona o fluxo do consórcio
-fluxo_caixa_constructa[-1] += agio + rendimento_selic - custo_consorcio
-lucro_constructa = np.sum(fluxo_caixa_constructa)
+lucro_constructa = lucro_operacional + rendimento_selic + agio - custo_consorcio
 
 # Criando DataFrame com os resultados
 cenarios = {
-    "Auto Financiado": {"Lucro": lucro_auto, "Margem": (lucro_auto/vgv)*100, "Capital Inicial": -min(0, np.min(np.cumsum(fluxo_caixa_auto)))},
+    "Auto Financiado": {"Lucro": lucro_auto, "Margem": (lucro_auto/vgv)*100, "Capital Inicial": 0},
     "Financiamento Tradicional": {"Lucro": lucro_financiamento, "Margem": (lucro_financiamento/vgv)*100, "Capital Inicial": custo_construcao - valor_financiado},
     "Constructa": {"Lucro": lucro_constructa, "Margem": (lucro_constructa/vgv)*100, "Capital Inicial": lance}
 }
@@ -114,9 +106,17 @@ st.pyplot(fig)
 st.subheader("Tabela Comparativa")
 st.table(df.set_index("Cenário").round(2))
 
-# Gráfico de fluxo de caixa
+# Gráfico de fluxo de caixa (mantido para visualização)
 st.subheader("Fluxo de Caixa Acumulado")
 fig, ax = plt.subplots(figsize=(12, 6))
+fluxo_caixa_auto = fluxo_recebiveis * vgv - fluxo_obra * custo_construcao
+fluxo_caixa_financiamento = fluxo_caixa_auto.copy()
+fluxo_caixa_financiamento[0] += valor_financiado
+fluxo_caixa_financiamento[-1] -= (valor_financiado + juros_financiamento)
+fluxo_caixa_constructa = fluxo_caixa_auto.copy()
+fluxo_caixa_constructa[0] -= lance
+fluxo_caixa_constructa += fluxo_obra * (custo_construcao / prazo_meses)
+fluxo_caixa_constructa[-1] += agio + rendimento_selic - custo_consorcio
 ax.plot(np.cumsum(fluxo_caixa_auto), label="Auto Financiado")
 ax.plot(np.cumsum(fluxo_caixa_financiamento), label="Financiamento Tradicional")
 ax.plot(np.cumsum(fluxo_caixa_constructa), label="Constructa")
@@ -147,8 +147,8 @@ que é {
     "menor" if lance < cenarios["Auto Financiado"]["Capital Inicial"] else "maior"
 } que o Auto Financiado (R$ {cenarios["Auto Financiado"]["Capital Inicial"]:.2f} milhões).
 
-O fluxo de caixa {fluxo_caixa.lower()} da obra e a estrutura de recebíveis escolhida impactam significativamente o desempenho de cada modelo. 
-O gráfico de fluxo de caixa acumulado demonstra como cada cenário se comporta ao longo do tempo do projeto.
+O fluxo de caixa {fluxo_caixa.lower()} da obra e a estrutura de recebíveis escolhida impactam o desempenho de cada modelo, 
+como demonstrado no gráfico de fluxo de caixa acumulado.
 
 A escolha entre os modelos deve considerar não apenas o retorno financeiro, 
 mas também o perfil de risco da incorporadora, as condições específicas do mercado e a capacidade de gestão do fluxo de caixa ao longo do projeto.
