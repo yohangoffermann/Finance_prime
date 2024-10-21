@@ -19,15 +19,33 @@ def calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentu
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
-def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic):
+def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic, taxa_admin_consorcio):
     fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
     lance = custo_construcao * lance_percentual
-    fluxo.loc[0, 'Receitas'] = custo_construcao + (vgv * entrada_percentual * (1 + agio_percentual))
+    credito_consorcio = custo_construcao - lance
+    
+    # Recebimento inicial (crédito do consórcio + entrada com ágio)
+    fluxo.loc[0, 'Receitas'] = credito_consorcio + (vgv * entrada_percentual * (1 + agio_percentual))
     fluxo.loc[0, 'Custos'] = lance
-    fluxo['Custos'].iloc[1:] = (custo_construcao - lance) / (prazo_meses - 1)
-    fluxo['Receitas'].iloc[1:] = (vgv * (1 - entrada_percentual) * (1 + agio_percentual)) / (prazo_meses - 1)
+    
+    # Custos de construção distribuídos linearmente
+    fluxo['Custos'] += custo_construcao / prazo_meses
+    
+    # Cálculo das parcelas do consórcio
+    amortizacao_mensal = credito_consorcio / prazo_meses
+    taxa_admin_mensal = (taxa_admin_consorcio / 100 / 12) * credito_consorcio
+    parcela_consorcio = amortizacao_mensal + taxa_admin_mensal
+    
+    # Adicionar parcelas do consórcio aos custos mensais
+    fluxo['Custos'] += parcela_consorcio
+    
+    # Receitas das vendas distribuídas (com ágio)
+    fluxo['Receitas'].iloc[1:] += (vgv * (1 - entrada_percentual) * (1 + agio_percentual)) / (prazo_meses - 1)
+    
+    # Rendimento Selic sobre o lance
     rendimento_selic = lance * ((1 + taxa_selic)**(prazo_meses/12) - 1)
     fluxo.loc[prazo_meses-1, 'Receitas'] += rendimento_selic
+    
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
@@ -42,12 +60,13 @@ taxa_juros = st.sidebar.number_input('Taxa de Juros Financiamento (% a.a.)', val
 percentual_financiado = st.sidebar.slider('Percentual Financiado', 20, 80, 40) / 100
 lance_percentual = st.sidebar.slider('Lance do Consórcio (%)', 20, 40, 25) / 100
 agio_percentual = st.sidebar.slider('Ágio do Consórcio (%)', 10, 50, 20) / 100
+taxa_admin_consorcio = st.sidebar.slider('Taxa de Administração do Consórcio (% a.a.)', 0.5, 5.0, 1.0, step=0.1)
 
 custo_construcao = vgv * custo_construcao_percentual / 100
 
 fluxo_auto = calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual)
 fluxo_financiamento = calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentual, taxa_juros, percentual_financiado)
-fluxo_constructa = calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic)
+fluxo_constructa = calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic, taxa_admin_consorcio)
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=fluxo_auto.index, y=fluxo_auto['Saldo'].cumsum(), mode='lines', name='Auto Financiado'))
@@ -70,14 +89,12 @@ results = pd.DataFrame({
 
 st.write(results)
 
-# Gráfico de barras para comparar margens brutas
 fig_margin = go.Figure(data=[
     go.Bar(name='Margem Bruta (%)', x=results['Cenário'], y=results['Margem Bruta (%)'])
 ])
 fig_margin.update_layout(title='Comparativo de Margem Bruta por Cenário')
 st.plotly_chart(fig_margin)
 
-# Análise adicional
 st.subheader("Análise Comparativa")
 melhor_margem = results.loc[results['Margem Bruta (%)'].idxmax(), 'Cenário']
 menor_exposicao = results.loc[results['Exposição Máxima (milhões R$)'].idxmin(), 'Cenário']
@@ -91,4 +108,5 @@ st.write(f"A diferença entre a maior e a menor margem bruta é de {diferenca_ma
 st.write("Considerações:")
 st.write("1. O modelo Auto Financiado geralmente oferece a maior margem bruta, mas pode requerer maior capital próprio.")
 st.write("2. O Financiamento Tradicional pode reduzir a necessidade de capital próprio, mas os juros impactam a margem.")
-st.write("3. O modelo Constructa busca equilibrar a necessidade de capital com potencial de ganho através do ágio.")
+st.write("3. O modelo Constructa equilibra a necessidade de capital com potencial de ganho através do ágio, considerando o custo do carrego do consórcio.")
+st.write("4. A taxa de administração do consórcio e o percentual de lance impactam significativamente o desempenho do modelo Constructa.")
