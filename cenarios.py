@@ -53,11 +53,13 @@ def calculate_scenarios(params):
 
     # Cenário Auto Financiado
     lucro_auto = lucro_operacional
+    capital_inicial_auto = max(0, custo_construcao - valor_pago_cliente)
 
     # Cenário Financiamento Tradicional
     valor_financiado = custo_construcao * (params['percentual_financiado'] / 100)
     juros_financiamento = valor_financiado * ((1 + params['taxa_financiamento']/100)**(params['prazo_meses']/12) - 1)
     lucro_financiamento = lucro_operacional - juros_financiamento
+    capital_inicial_financiamento = custo_construcao - valor_financiado
 
     # Cenário Constructa
     lance = custo_construcao * (params['lance_consorcio'] / 100)
@@ -69,18 +71,17 @@ def calculate_scenarios(params):
     if params['modelo_pagamento_constructa'] == "Tradicional":
         valor_faltante = params['vgv'] - valor_pago_cliente
         saldo_assumido_cliente = min(valor_faltante, saldo_devedor_consorcio)
-        agio = max(0, valor_faltante - saldo_assumido_cliente)
-        lucro_constructa = (valor_pago_cliente + agio + saldo_assumido_cliente - custo_construcao) + rendimento_selic - custo_consorcio
+        agio = max(0, params['vgv'] - (valor_pago_cliente + saldo_assumido_cliente))
     else:
         saldo_assumido_cliente = saldo_devedor_consorcio
         agio = max(0, params['vgv'] - saldo_assumido_cliente)
-        lucro_constructa = (agio + saldo_assumido_cliente - custo_construcao) + rendimento_selic - custo_consorcio
 
+    lucro_constructa = params['vgv'] - custo_construcao + rendimento_selic - custo_consorcio + agio
     percentual_agio = (agio / custo_construcao) * 100
 
     return {
-        "Auto Financiado": {"Lucro": lucro_auto, "Margem": (lucro_auto/params['vgv'])*100, "Capital Inicial": custo_construcao - valor_pago_cliente},
-        "Financiamento Tradicional": {"Lucro": lucro_financiamento, "Margem": (lucro_financiamento/params['vgv'])*100, "Capital Inicial": custo_construcao - valor_financiado},
+        "Auto Financiado": {"Lucro": lucro_auto, "Margem": (lucro_auto/params['vgv'])*100, "Capital Inicial": capital_inicial_auto},
+        "Financiamento Tradicional": {"Lucro": lucro_financiamento, "Margem": (lucro_financiamento/params['vgv'])*100, "Capital Inicial": capital_inicial_financiamento},
         "Constructa": {"Lucro": lucro_constructa, "Margem": (lucro_constructa/params['vgv'])*100, "Capital Inicial": lance},
         "Detalhes Constructa": {
             "Valor Pago Cliente até o fim da obra": valor_pago_cliente,
@@ -90,11 +91,18 @@ def calculate_scenarios(params):
             "Percentual Ágio": percentual_agio,
             "Rendimento Selic": rendimento_selic,
             "Custo Consórcio": custo_consorcio
+        },
+        "Detalhes Adicionais": {
+            "Custo de Construção": custo_construcao,
+            "Valor Pago Cliente": valor_pago_cliente,
+            "Saldo Devedor Consórcio": saldo_devedor_consorcio,
+            "Rendimento Selic": rendimento_selic,
+            "Custo Consórcio": custo_consorcio
         }
     }
 
 def display_results(results, params):
-    df = pd.DataFrame({k: v for k, v in results.items() if k != "Detalhes Constructa"}).T
+    df = pd.DataFrame({k: v for k, v in results.items() if k not in ["Detalhes Constructa", "Detalhes Adicionais"]}).T
     df = df.reset_index()
     df.columns = ["Cenário", "Lucro", "Margem", "Capital Inicial"]
 
@@ -122,6 +130,12 @@ def display_results(results, params):
         else:
             st.write(f"{key}: R$ {value:.2f} milhões")
 
+    # Detalhes Adicionais
+    st.subheader("Detalhes Adicionais")
+    detalhes_adicionais = results["Detalhes Adicionais"]
+    for key, value in detalhes_adicionais.items():
+        st.write(f"{key}: R$ {value:.2f} milhões")
+
     # Análise detalhada
     st.subheader("Análise Detalhada")
     write_analysis(results, params)
@@ -144,6 +158,7 @@ def write_analysis(results, params):
     Detalhes do Constructa:
     - Valor pago pelo cliente até o fim da obra: R$ {detalhes['Valor Pago Cliente até o fim da obra']:.2f} milhões
     - Saldo devedor do consórcio: R$ {detalhes['Saldo Devedor Consórcio']:.2f} milhões
+    - Saldo assumido pelo cliente: R$ {detalhes['Saldo Assumido Cliente']:.2f} milhões
     - Ágio: R$ {detalhes['Ágio']:.2f} milhões ({detalhes['Percentual Ágio']:.2f}% do custo de construção)
     - Rendimento Selic: R$ {detalhes['Rendimento Selic']:.2f} milhões
     - Custo do Consórcio: R$ {detalhes['Custo Consórcio']:.2f} milhões
@@ -151,9 +166,13 @@ def write_analysis(results, params):
     O modelo de pagamento escolhido para o Constructa foi "{params['modelo_pagamento_constructa']}".
     
     Comparação:
-    - O Constructa apresenta uma margem {constructa['Margem'] - financiamento['Margem']:.2f} pontos percentuais maior que o Financiamento Tradicional.
-    - O Constructa requer um capital inicial R$ {financiamento['Capital Inicial'] - constructa['Capital Inicial']:.2f} milhões menor que o Financiamento Tradicional.
-    - Em relação ao Auto Financiado, o Constructa tem uma margem {constructa['Margem'] - auto['Margem']:.2f} pontos percentuais {
+    - O Constructa apresenta uma margem {constructa['Margem'] - financiamento['Margem']:.2f} pontos percentuais {
+        'maior' if constructa['Margem'] > financiamento['Margem'] else 'menor'
+    } que o Financiamento Tradicional.
+    - O Constructa requer um capital inicial R$ {abs(financiamento['Capital Inicial'] - constructa['Capital Inicial']):.2f} milhões {
+        'menor' if constructa['Capital Inicial'] < financiamento['Capital Inicial'] else 'maior'
+    } que o Financiamento Tradicional.
+    - Em relação ao Auto Financiado, o Constructa tem uma margem {abs(constructa['Margem'] - auto['Margem']):.2f} pontos percentuais {
         'maior' if constructa['Margem'] > auto['Margem'] else 'menor'
     }, e requer R$ {abs(constructa['Capital Inicial'] - auto['Capital Inicial']):.2f} milhões {
         'a mais' if constructa['Capital Inicial'] > auto['Capital Inicial'] else 'a menos'
