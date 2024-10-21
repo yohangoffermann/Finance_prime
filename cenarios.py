@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import numpy as np
 
 def calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual):
     fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
@@ -67,6 +68,14 @@ custo_construcao = vgv * custo_construcao_percentual / 100
 fluxo_auto = calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual)
 fluxo_financiamento = calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentual, taxa_juros, percentual_financiado)
 fluxo_constructa = calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic, taxa_admin_consorcio)
+
+# Logging para debug
+st.write("Fluxo Auto Financiado:")
+st.write(fluxo_auto)
+st.write("Fluxo Financiamento Tradicional:")
+st.write(fluxo_financiamento)
+st.write("Fluxo Constructa:")
+st.write(fluxo_constructa)
 
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=fluxo_auto.index, y=fluxo_auto['Saldo'].cumsum(), mode='lines', name='Auto Financiado'))
