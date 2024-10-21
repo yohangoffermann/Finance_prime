@@ -1,9 +1,8 @@
 import streamlit as st
-from streamlit_option_menu import option_menu
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # Configuração da página
 st.set_page_config(page_title="Análise de Fluxo de Caixa", layout="wide")
@@ -14,7 +13,6 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
                                    prazo_parcelas):
     fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Mês', 'Receitas', 'Custos', 'Saldo Mensal', 'Saldo Acumulado'])
     
-    # Distribuição dos custos
     custos = np.zeros(prazo_meses)
     tercio_obra = prazo_meses // 3
     custos[:tercio_obra] = custo_construcao * percentual_inicio / 100 / tercio_obra
@@ -22,20 +20,15 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     custos[2*tercio_obra:] = custo_construcao * percentual_fim / 100 / (prazo_meses - 2*tercio_obra)
     fluxo['Custos'] = custos
     
-    # Distribuição das receitas
     fluxo['Receitas'] = 0
-    
-    # Lançamento
     fluxo.loc[0, 'Receitas'] += vgv * percentual_lancamento / 100
     
-    # Balões
     valor_baloes = vgv * percentual_baloes / 100
     num_baloes = 3
     for i in range(1, num_baloes + 1):
         mes_balao = i * prazo_meses // (num_baloes + 1)
         fluxo.loc[mes_balao, 'Receitas'] += valor_baloes / num_baloes
     
-    # Parcelas
     valor_parcelas = vgv * percentual_parcelas / 100
     parcela_mensal = valor_parcelas / min(prazo_parcelas, prazo_meses)
     fluxo.loc[:min(prazo_parcelas, prazo_meses)-1, 'Receitas'] += parcela_mensal
@@ -47,40 +40,25 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     
     return fluxo
 
-def mostrar_graficos(fluxo, percentual_inicio, percentual_meio, percentual_fim,
-                     percentual_lancamento, percentual_baloes, percentual_parcelas):
+def mostrar_graficos(fluxo):
+    fig = make_subplots(rows=2, cols=2, subplot_titles=("Receitas e Custos", "Fluxo de Caixa", "Saldo Acumulado", "Comparação"))
+
+    # Gráfico de Receitas e Custos
+    fig.add_trace(go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', marker_color='green'), row=1, col=1)
+    fig.add_trace(go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', marker_color='red'), row=1, col=1)
+
     # Gráfico de Fluxo de Caixa
-    fig_fluxo = go.Figure()
-    fig_fluxo.add_trace(go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', marker_color='green'))
-    fig_fluxo.add_trace(go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', marker_color='red'))
-    fig_fluxo.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', 
-                                   mode='lines+markers', line=dict(color='blue', width=3), yaxis='y2'))
-    fig_fluxo.update_layout(
-        title='Fluxo de Caixa ao Longo do Tempo',
-        xaxis_title='Mês',
-        yaxis_title='Valores (milhões R$)',
-        yaxis2=dict(title='Saldo Acumulado (milhões R$)', overlaying='y', side='right'),
-        barmode='relative',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        height=500
-    )
-    st.plotly_chart(fig_fluxo, use_container_width=True)
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Mensal'], name='Saldo Mensal', mode='lines', line=dict(color='blue')), row=1, col=2)
 
-    # Gráfico de Pizza para Distribuição de Custos
-    labels = ['Início', 'Meio', 'Fim']
-    values = [percentual_inicio, percentual_meio, percentual_fim]
-    fig_pizza_custos = px.pie(values=values, names=labels, title='Distribuição dos Custos')
-    
-    # Gráfico de Pizza para Distribuição de Vendas
-    labels_vendas = ['Lançamento', 'Balões', 'Parcelas']
-    values_vendas = [percentual_lancamento, percentual_baloes, percentual_parcelas]
-    fig_pizza_vendas = px.pie(values=values_vendas, names=labels_vendas, title='Distribuição das Vendas')
+    # Gráfico de Saldo Acumulado
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', mode='lines+markers', line=dict(color='orange')), row=2, col=1)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(fig_pizza_custos, use_container_width=True)
-    with col2:
-        st.plotly_chart(fig_pizza_vendas, use_container_width=True)
+    # Gráfico de Comparação
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', mode='lines', line=dict(color='green')), row=2, col=2)
+    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', mode='lines', line=dict(color='red')), row=2, col=2)
+
+    fig.update_layout(title_text="Análise de Fluxo de Caixa", height=800)
+    st.plotly_chart(fig, use_container_width=True)
 
 # Menu de navegação lateral
 with st.sidebar:
@@ -159,13 +137,7 @@ elif selected == "Fluxo de Caixa":
         st.session_state.prazo_parcelas
     )
 
-    mostrar_graficos(fluxo_auto, 
-                     st.session_state.percentual_inicio, 
-                     st.session_state.percentual_meio, 
-                     st.session_state.percentual_fim,
-                     st.session_state.percentual_lancamento, 
-                     st.session_state.percentual_baloes, 
-                     st.session_state.percentual_parcelas)
+    mostrar_graficos(fluxo_auto)
 
     st.subheader('Fluxo de Caixa Mensal')
     st.dataframe(fluxo_auto)
@@ -222,14 +194,6 @@ elif selected == "Análise":
     6. O projeto atinge o ponto de equilíbrio (payback) no mês {mes_payback}{f', com um saldo positivo de R$ {valor_payback:.2f} milhões' if isinstance(mes_payback, int) else ''}.
     7. A margem final do projeto é de {margem:.2f}%.
     """)
-
-    mostrar_graficos(fluxo_auto, 
-                     st.session_state.percentual_inicio, 
-                     st.session_state.percentual_meio, 
-                     st.session_state.percentual_fim,
-                     st.session_state.percentual_lancamento, 
-                     st.session_state.percentual_baloes, 
-                     st.session_state.percentual_parcelas)
 
 if __name__ == "__main__":
     st.sidebar.title("Sobre")
