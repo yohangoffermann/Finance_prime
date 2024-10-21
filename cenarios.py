@@ -10,6 +10,15 @@ def main():
     fluxo_caixa = calcular_fluxo_caixa(params)
     display_results(fluxo_caixa, params)
 
+    # Opção para usar a ferramenta Constructa
+    if st.checkbox("Aplicar Ferramenta Constructa"):
+        fluxo_otimizado = ferramenta_constructa(fluxo_caixa, params)
+        
+        st.subheader("Análise Comparativa")
+        st.write(f"VPL Original: R$ {fluxo_caixa['Saldo'].iloc[-1]:.2f} milhões")
+        st.write(f"VPL Otimizado: R$ {fluxo_otimizado['Saldo Otimizado'].iloc[-1]:.2f} milhões")
+        st.write(f"Melhoria no VPL: R$ {(fluxo_otimizado['Saldo Otimizado'].iloc[-1] - fluxo_caixa['Saldo'].iloc[-1]):.2f} milhões")
+
 def get_user_inputs():
     st.sidebar.header("Parâmetros do Projeto")
     params = {
@@ -117,6 +126,81 @@ def display_results(fluxo_caixa, params):
     st.write(f"Prazo total do fluxo de caixa: {len(fluxo_caixa)} meses")
     st.write(f"Prazo de construção: {params['prazo_meses']} meses")
     st.write(f"Prazo das parcelas: {params['prazo_parcelas']} meses")
+
+def ferramenta_constructa(fluxo_caixa, params):
+    st.subheader("Ferramenta Constructa")
+
+    # Parâmetros específicos do Constructa
+    percentual_consorcio = st.slider("Percentual do VGV para Consórcio", 50, 100, 70)
+    percentual_agio = st.slider("Percentual de Ágio Esperado", 5, 30, 10)
+
+    valor_consorcio = params['vgv'] * (percentual_consorcio / 100)
+    
+    # Identificar oportunidades de ágio
+    oportunidades_agio = identificar_oportunidades_agio(fluxo_caixa, params, percentual_agio)
+
+    # Simular uso do consórcio
+    fluxo_otimizado = simular_uso_consorcio(fluxo_caixa, oportunidades_agio, valor_consorcio)
+
+    # Exibir resultados
+    st.write("Oportunidades de Ágio Identificadas:")
+    st.table(oportunidades_agio)
+
+    st.write("Fluxo de Caixa Otimizado com Constructa:")
+    st.dataframe(fluxo_otimizado)
+
+    # Comparar fluxos
+    comparar_fluxos(fluxo_caixa, fluxo_otimizado)
+
+    return fluxo_otimizado
+
+def identificar_oportunidades_agio(fluxo_caixa, params, percentual_agio):
+    oportunidades = []
+    threshold = fluxo_caixa['Receitas'].mean() * 1.5
+
+    for mes, row in fluxo_caixa.iterrows():
+        if row['Receitas'] > threshold or mes == 0 or mes in [int((i+1)*params['prazo_meses']/(len(params['baloes'])+1)) for i in range(len(params['baloes']))]:
+            oportunidades.append({
+                'Mês': mes,
+                'Valor Recebido': row['Receitas'],
+                'Potencial de Ágio': row['Receitas'] * (percentual_agio / 100)
+            })
+
+    return pd.DataFrame(oportunidades)
+
+def simular_uso_consorcio(fluxo_caixa, oportunidades_agio, valor_consorcio):
+    fluxo_otimizado = fluxo_caixa.copy()
+    saldo_consorcio = valor_consorcio
+
+    fluxo_otimizado['Receitas Consórcio'] = 0
+    for _, oportunidade in oportunidades_agio.iterrows():
+        mes = oportunidade['Mês']
+        if fluxo_otimizado.loc[mes, 'Saldo'] < 0 and saldo_consorcio > 0:
+            valor_utilizado = min(-fluxo_otimizado.loc[mes, 'Saldo'], saldo_consorcio)
+            fluxo_otimizado.loc[mes, 'Receitas Consórcio'] = valor_utilizado
+            saldo_consorcio -= valor_utilizado
+
+    fluxo_otimizado['Saldo Otimizado'] = fluxo_otimizado['Saldo'] + fluxo_otimizado['Receitas Consórcio'].cumsum()
+
+    return fluxo_otimizado
+
+def comparar_fluxos(fluxo_original, fluxo_otimizado):
+    st.subheader("Comparação de Fluxos de Caixa")
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(fluxo_original.index, fluxo_original['Saldo'], label='Saldo Original')
+    ax.plot(fluxo_otimizado.index, fluxo_otimizado['Saldo Otimizado'], label='Saldo Otimizado')
+    ax.set_xlabel('Meses')
+    ax.set_ylabel('Valor (R$ milhões)')
+    ax.legend()
+    st.pyplot(fig)
+
+    melhoria_exposicao = fluxo_original['Saldo'].min() - fluxo_otimizado['Saldo Otimizado'].min()
+    st.write(f"Melhoria na Exposição Máxima de Caixa: R$ {melhoria_exposicao:.2f} milhões")
+
+    meses_negativos_original = (fluxo_original['Saldo'] < 0).sum()
+    meses_negativos_otimizado = (fluxo_otimizado['Saldo Otimizado'] < 0).sum()
+    st.write(f"Redução de Meses com Caixa Negativo: {meses_negativos_original - meses_negativos_otimizado}")
 
 if __name__ == "__main__":
     main()
