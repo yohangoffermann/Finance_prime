@@ -47,7 +47,6 @@ def calcular_fluxo_caixa(params):
     custo_construcao = vgv * (params['custo_construcao_percentual'] / 100)
     unidades_totais = int(vgv / 0.5)  # Assumindo preço médio de 500 mil por unidade
 
-    # Inicializar o DataFrame com zeros
     fluxo = pd.DataFrame(0, index=range(meses), columns=['Receitas', 'Custos Construção', 'Despesas Marketing', 
                                                          'Despesas Administrativas', 'Juros', 'Saldo'])
     
@@ -107,16 +106,28 @@ def calcular_curva_s(total, meses):
     y = (1 / (1 + np.exp(-10*(x-0.5)))) * total
     return np.diff(y, prepend=0)
 
+def calcular_vpl(taxa, fluxos):
+    return sum(fluxo / (1 + taxa) ** i for i, fluxo in enumerate(fluxos))
+
+def calcular_tir(fluxos):
+    try:
+        return np.irr(fluxos)
+    except:
+        return None
+
 def calcular_metricas(fluxo_caixa, params):
-    vpl = np.npv(params['taxa_juros_aplicacao'] / 100 / 12, fluxo_caixa['Saldo'])
-    tir = np.irr(fluxo_caixa['Saldo'])
+    fluxos = fluxo_caixa['Saldo'].values
+    taxa_mensal = params['taxa_juros_aplicacao'] / 100 / 12
+    
+    vpl = calcular_vpl(taxa_mensal, fluxos)
+    tir = calcular_tir(fluxos)
     payback = np.where(fluxo_caixa['Saldo'] > 0)[0][0] if any(fluxo_caixa['Saldo'] > 0) else None
     max_exposicao = fluxo_caixa['Saldo'].min()
     
     return {
         'VPL': vpl,
         'TIR Mensal': tir,
-        'TIR Anual': (1 + tir)**12 - 1 if tir else None,
+        'TIR Anual': (1 + tir)**12 - 1 if tir is not None else None,
         'Payback (meses)': payback,
         'Máxima Exposição de Caixa': max_exposicao
     }
@@ -149,7 +160,7 @@ def display_results(fluxo_caixa, metricas, params):
     juros_totais = fluxo_caixa['Juros'].sum()
     st.write(f"Total de Juros: R$ {juros_totais:.2f} milhões")
     
-    if juros_totais > 0:
+    if juros_totais < 0:
         st.write("Oportunidade: Considere estratégias para reduzir períodos de caixa negativo e minimizar custos de financiamento.")
     else:
         st.write("Oportunidade: Explore opções para maximizar o rendimento do caixa positivo.")
