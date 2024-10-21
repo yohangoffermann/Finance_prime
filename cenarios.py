@@ -25,7 +25,6 @@ def get_user_inputs():
         'num_baloes': st.sidebar.number_input("Número de Balões", 1, 5, 3, step=1),
     }
     
-    # Coletar percentuais dos balões
     baloes = []
     total_baloes = 0
     for i in range(params['num_baloes']):
@@ -44,13 +43,8 @@ def calculate_scenarios(params):
     credito_consorcio = custo_construcao
     lance = credito_consorcio * (params['lance_consorcio'] / 100)
 
-    # Cálculo do fluxo de caixa mensal
     fluxo_caixa = calcular_fluxo_caixa(params, custo_construcao, credito_consorcio, lance)
-
-    # Cálculo das oportunidades de ágio
     oportunidades_agio = calcular_oportunidades_agio(params, fluxo_caixa, credito_consorcio)
-
-    # Cálculo dos resultados finais
     resultados = calcular_resultados_finais(params, fluxo_caixa, oportunidades_agio)
 
     return {
@@ -60,19 +54,66 @@ def calculate_scenarios(params):
     }
 
 def calcular_fluxo_caixa(params, custo_construcao, credito_consorcio, lance):
-    # Implementar cálculo detalhado do fluxo de caixa mensal
-    # Considerar entradas, balões, parcelas, custos de construção, etc.
-    pass
+    meses = params['prazo_meses']
+    fluxo = pd.DataFrame(index=range(meses), columns=['Receitas', 'Custos', 'Saldo'])
+    
+    # Entrada
+    fluxo.loc[0, 'Receitas'] = params['vgv'] * (params['entrada_percentual'] / 100)
+    
+    # Balões
+    for i, balao in enumerate(params['baloes']):
+        mes = int((i + 1) * meses / (len(params['baloes']) + 1))
+        fluxo.loc[mes, 'Receitas'] += params['vgv'] * (balao / 100)
+    
+    # Parcelas
+    valor_parcela = (params['vgv'] * (params['parcelas_percentual'] / 100)) / meses
+    fluxo['Receitas'] = fluxo['Receitas'].fillna(valor_parcela)
+    
+    # Custos de construção (distribuição linear simplificada)
+    fluxo['Custos'] = custo_construcao / meses
+    
+    # Saldo
+    fluxo['Saldo'] = fluxo['Receitas'].cumsum() - fluxo['Custos'].cumsum()
+    
+    return fluxo
 
 def calcular_oportunidades_agio(params, fluxo_caixa, credito_consorcio):
-    # Identificar momentos de entrada e balões como oportunidades de ágio
-    # Calcular potencial de ágio baseado em condições de mercado simuladas
-    pass
+    oportunidades = []
+    saldo_consorcio = credito_consorcio
+    
+    for mes, row in fluxo_caixa.iterrows():
+        if row['Receitas'] > valor_parcela or mes == 0:  # Entrada ou balão
+            agio_potencial = min(saldo_consorcio, row['Receitas']) * 0.2  # 20% de ágio estimado
+            oportunidades.append({
+                'Mês': mes,
+                'Valor Recebido': row['Receitas'],
+                'Saldo Consórcio': saldo_consorcio,
+                'Ágio Potencial': agio_potencial
+            })
+            saldo_consorcio -= min(saldo_consorcio, row['Receitas'])
+    
+    return pd.DataFrame(oportunidades)
 
 def calcular_resultados_finais(params, fluxo_caixa, oportunidades_agio):
-    # Calcular lucro total, considerando ágio realizado
-    # Calcular ROI, margem, e outros indicadores financeiros relevantes
-    pass
+    vgv = params['vgv']
+    custo_construcao = vgv * (params['custo_construcao_percentual'] / 100)
+    
+    receita_total = fluxo_caixa['Receitas'].sum()
+    custo_total = fluxo_caixa['Custos'].sum()
+    agio_total = oportunidades_agio['Ágio Potencial'].sum()
+    
+    lucro_operacional = vgv - custo_construcao
+    lucro_total = lucro_operacional + agio_total
+    
+    return {
+        'VGV': vgv,
+        'Custo de Construção': custo_construcao,
+        'Lucro Operacional': lucro_operacional,
+        'Ágio Total': agio_total,
+        'Lucro Total': lucro_total,
+        'Margem Operacional': (lucro_operacional / vgv) * 100,
+        'Margem Total': (lucro_total / vgv) * 100
+    }
 
 def display_results(results, params):
     st.header("Resultados da Análise")
@@ -94,20 +135,28 @@ def display_results(results, params):
     plot_analise_sensibilidade(params, results)
 
 def plot_fluxo_caixa(fluxo_caixa):
-    # Implementar visualização do fluxo de caixa
-    pass
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(fluxo_caixa.index, fluxo_caixa['Saldo'], label='Saldo Acumulado')
+    ax.bar(fluxo_caixa.index, fluxo_caixa['Receitas'], alpha=0.3, label='Receitas')
+    ax.bar(fluxo_caixa.index, -fluxo_caixa['Custos'], alpha=0.3, label='Custos')
+    ax.set_xlabel('Meses')
+    ax.set_ylabel('Valor (R$ milhões)')
+    ax.legend()
+    st.pyplot(fig)
 
 def plot_oportunidades_agio(oportunidades_agio):
-    # Implementar visualização das oportunidades de ágio
-    pass
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.bar(oportunidades_agio['Mês'], oportunidades_agio['Ágio Potencial'])
+    ax.set_xlabel('Meses')
+    ax.set_ylabel('Ágio Potencial (R$ milhões)')
+    st.pyplot(fig)
 
 def display_resultados_finais(resultados):
-    # Exibir tabela com resultados financeiros principais
-    pass
+    st.table(pd.DataFrame([resultados]).T)
 
 def plot_analise_sensibilidade(params, results):
-    # Implementar análise de sensibilidade para principais variáveis
-    pass
+    # Simplificada para este exemplo
+    st.write("Análise de sensibilidade não implementada nesta versão.")
 
 if __name__ == "__main__":
     main()
