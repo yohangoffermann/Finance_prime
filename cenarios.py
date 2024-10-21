@@ -5,18 +5,41 @@ import numpy as np
 
 def calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual):
     fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
-    fluxo['Custos'] = custo_construcao / prazo_meses
     fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
     fluxo['Receitas'].iloc[1:] = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
+    fluxo['Custos'] = custo_construcao / prazo_meses
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
 def calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentual, taxa_juros, percentual_financiado):
-    fluxo = calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual)
+    fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
+    
+    # Entrada
+    fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
+    
+    # Distribuição das receitas restantes
+    receita_mensal = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
+    fluxo['Receitas'].iloc[1:] = receita_mensal
+    
+    # Custos de construção
+    custo_mensal = custo_construcao / prazo_meses
+    fluxo['Custos'] = custo_mensal
+    
+    # Financiamento
     valor_financiado = custo_construcao * percentual_financiado
-    juros_totais = valor_financiado * ((1 + taxa_juros)**(prazo_meses/12) - 1)
-    fluxo.loc[0, 'Saldo'] += valor_financiado
-    fluxo.loc[prazo_meses-1, 'Custos'] += valor_financiado + juros_totais
+    fluxo.loc[0, 'Receitas'] += valor_financiado  # Recebimento do financiamento
+    
+    # Cálculo dos juros e amortização
+    taxa_mensal = (1 + taxa_juros) ** (1/12) - 1
+    parcela = valor_financiado * (taxa_mensal * (1 + taxa_mensal) ** prazo_meses) / ((1 + taxa_mensal) ** prazo_meses - 1)
+    
+    saldo_devedor = valor_financiado
+    for mes in range(prazo_meses):
+        juros = saldo_devedor * taxa_mensal
+        amortizacao = parcela - juros
+        fluxo.loc[mes, 'Custos'] += parcela
+        saldo_devedor -= amortizacao
+    
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
