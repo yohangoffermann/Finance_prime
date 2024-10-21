@@ -213,7 +213,7 @@ def aba_financiamento_tradicional():
     percentual_financiado = st.slider('% do Orçamento Financiado', 0, 100, 50, key='percentual_financiado')
     taxa_juros_anual = st.slider('Taxa de Juros Anual (%)', 0.0, 20.0, 12.0, step=0.1) / 100
 
-        custo_construcao = vgv * custo_construcao_percentual / 100
+    custo_construcao = vgv * custo_construcao_percentual / 100
     fluxo_financiado = calcular_fluxo_financiado(vgv, custo_construcao, prazo_meses, 
                                                  percentual_inicio, percentual_meio, percentual_fim,
                                                  percentual_lancamento, percentual_baloes, percentual_parcelas,
