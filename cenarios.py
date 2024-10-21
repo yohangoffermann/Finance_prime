@@ -5,12 +5,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def main():
-    st.set_page_config(page_title="Modelo Constructa Avançado", layout="wide")
-    st.title("Modelo Constructa: Otimização de Ágio e Fluxo de Caixa")
+    st.title("Fluxo de Caixa Detalhado do Empreendimento Imobiliário")
 
     params = get_user_inputs()
-    results = calculate_scenarios(params)
-    display_results(results, params)
+    fluxo_caixa = calcular_fluxo_caixa(params)
+    metricas = calcular_metricas(fluxo_caixa, params)
+    display_results(fluxo_caixa, metricas, params)
 
 def get_user_inputs():
     st.sidebar.header("Parâmetros do Projeto")
@@ -18,11 +18,14 @@ def get_user_inputs():
         'vgv': st.sidebar.number_input("VGV (milhões R$)", value=35.0, step=0.1),
         'custo_construcao_percentual': st.sidebar.slider("Custo de Construção (% do VGV)", 50, 90, 70),
         'prazo_meses': st.sidebar.number_input("Prazo de Construção (meses)", value=48, step=1),
-        'taxa_selic': st.sidebar.number_input("Taxa Selic (% a.a.)", value=11.0, step=0.1),
-        'incc': st.sidebar.number_input("INCC (% a.a.)", value=6.0, step=0.1),
-        'lance_consorcio': st.sidebar.slider("Lance do Consórcio (%)", 20, 40, 25),
         'entrada_percentual': st.sidebar.slider("Entrada (%)", 0, 50, 20),
         'num_baloes': st.sidebar.number_input("Número de Balões", 1, 5, 3, step=1),
+        'taxa_juros_aplicacao': st.sidebar.number_input("Taxa de Juros para Aplicação (% a.a.)", value=5.0, step=0.1),
+        'taxa_juros_financiamento': st.sidebar.number_input("Taxa de Juros para Financiamento (% a.a.)", value=12.0, step=0.1),
+        'percentual_vendas_pre_lancamento': st.sidebar.slider("Vendas no Pré-Lançamento (%)", 0, 100, 30),
+        'velocidade_vendas': st.sidebar.slider("Velocidade de Vendas (unidades/mês)", 1, 10, 3),
+        'despesas_marketing_percentual': st.sidebar.slider("Despesas de Marketing (% do VGV)", 0, 10, 3),
+        'despesas_administrativas_percentual': st.sidebar.slider("Despesas Administrativas (% do VGV)", 0, 10, 2),
     }
     
     baloes = []
@@ -38,118 +41,128 @@ def get_user_inputs():
 
     return params
 
-def calculate_scenarios(params):
-    custo_construcao = params['vgv'] * (params['custo_construcao_percentual'] / 100)
-    credito_consorcio = custo_construcao
-    lance = credito_consorcio * (params['lance_consorcio'] / 100)
-
-    fluxo_caixa = calcular_fluxo_caixa(params, custo_construcao, credito_consorcio, lance)
-    oportunidades_agio = calcular_oportunidades_agio(params, fluxo_caixa, credito_consorcio)
-    resultados = calcular_resultados_finais(params, fluxo_caixa, oportunidades_agio)
-
-    return {
-        "Fluxo de Caixa": fluxo_caixa,
-        "Oportunidades de Ágio": oportunidades_agio,
-        "Resultados Finais": resultados
-    }
-
-def calcular_fluxo_caixa(params, custo_construcao, credito_consorcio, lance):
+def calcular_fluxo_caixa(params):
     meses = params['prazo_meses']
-    fluxo = pd.DataFrame(index=range(meses), columns=['Receitas', 'Custos', 'Saldo'])
+    vgv = params['vgv']
+    custo_construcao = vgv * (params['custo_construcao_percentual'] / 100)
+    unidades_totais = int(vgv / 0.5)  # Assumindo preço médio de 500 mil por unidade
+
+    fluxo = pd.DataFrame(index=range(meses), columns=['Receitas', 'Custos Construção', 'Despesas Marketing', 
+                                                      'Despesas Administrativas', 'Juros', 'Saldo'])
     
-    # Entrada
-    fluxo.loc[0, 'Receitas'] = params['vgv'] * (params['entrada_percentual'] / 100)
+    # Vendas no pré-lançamento
+    unidades_vendidas_pre = int(unidades_totais * params['percentual_vendas_pre_lancamento'] / 100)
+    fluxo.loc[0, 'Receitas'] = unidades_vendidas_pre * 0.5 * (params['entrada_percentual'] / 100)
     
-    # Balões
-    for i, balao in enumerate(params['baloes']):
-        mes = int((i + 1) * meses / (len(params['baloes']) + 1))
-        fluxo.loc[mes, 'Receitas'] += params['vgv'] * (balao / 100)
+    # Vendas durante a construção
+    unidades_restantes = unidades_totais - unidades_vendidas_pre
+    meses_venda = min(meses, int(unidades_restantes / params['velocidade_vendas']))
     
-    # Parcelas
-    valor_parcela = (params['vgv'] * (params['parcelas_percentual'] / 100)) / meses
-    fluxo['Receitas'] = fluxo['Receitas'].fillna(valor_parcela)
+    for mes in range(meses_venda):
+        unidades_vendidas = min(params['velocidade_vendas'], unidades_restantes)
+        receita_mes = unidades_vendidas * 0.5
+        fluxo.loc[mes, 'Receitas'] = fluxo.loc[mes, 'Receitas'].fillna(0) + receita_mes * (params['entrada_percentual'] / 100)
+        
+        # Balões
+        for i, balao in enumerate(params['baloes']):
+            mes_balao = int((i + 1) * meses / (len(params['baloes']) + 1))
+            fluxo.loc[mes_balao, 'Receitas'] = fluxo.loc[mes_balao, 'Receitas'].fillna(0) + receita_mes * (balao / 100)
+        
+        # Parcelas
+        valor_parcela = (receita_mes * (params['parcelas_percentual'] / 100)) / meses
+        for m in range(mes, meses):
+            fluxo.loc[m, 'Receitas'] = fluxo.loc[m, 'Receitas'].fillna(0) + valor_parcela
+        
+        unidades_restantes -= unidades_vendidas
     
-    # Custos de construção (distribuição linear simplificada)
-    fluxo['Custos'] = custo_construcao / meses
+    # Custos e Despesas
+    fluxo['Custos Construção'] = calcular_curva_s(custo_construcao, meses)
+    fluxo['Despesas Marketing'] = vgv * (params['despesas_marketing_percentual'] / 100) / meses
+    fluxo['Despesas Administrativas'] = vgv * (params['despesas_administrativas_percentual'] / 100) / meses
     
-    # Saldo
-    fluxo['Saldo'] = fluxo['Receitas'].cumsum() - fluxo['Custos'].cumsum()
+    # Cálculo do Saldo e Juros
+    saldo_acumulado = 0
+    for mes in range(meses):
+        receitas = fluxo.loc[mes, 'Receitas']
+        custos = fluxo.loc[mes, 'Custos Construção'] + fluxo.loc[mes, 'Despesas Marketing'] + fluxo.loc[mes, 'Despesas Administrativas']
+        saldo_mes = receitas - custos
+        saldo_acumulado += saldo_mes
+        
+        if saldo_acumulado > 0:
+            juros = saldo_acumulado * (params['taxa_juros_aplicacao'] / 100 / 12)
+            fluxo.loc[mes, 'Juros'] = juros
+            saldo_acumulado += juros
+        else:
+            juros = saldo_acumulado * (params['taxa_juros_financiamento'] / 100 / 12)
+            fluxo.loc[mes, 'Juros'] = juros
+            saldo_acumulado += juros
+        
+        fluxo.loc[mes, 'Saldo'] = saldo_acumulado
     
     return fluxo
 
-def calcular_oportunidades_agio(params, fluxo_caixa, credito_consorcio):
-    oportunidades = []
-    saldo_consorcio = credito_consorcio
-    valor_parcela = (params['vgv'] * (params['parcelas_percentual'] / 100)) / params['prazo_meses']
-    
-    for mes, row in fluxo_caixa.iterrows():
-        if row['Receitas'] > valor_parcela * 1.1 or mes == 0:  # Entrada, balão ou valor significativamente maior
-            agio_potencial = min(saldo_consorcio, row['Receitas']) * 0.2  # 20% de ágio estimado
-            oportunidades.append({
-                'Mês': mes,
-                'Valor Recebido': row['Receitas'],
-                'Saldo Consórcio': saldo_consorcio,
-                'Ágio Potencial': agio_potencial
-            })
-            saldo_consorcio -= min(saldo_consorcio, row['Receitas'])
-    
-    return pd.DataFrame(oportunidades)
+def calcular_curva_s(total, meses):
+    x = np.linspace(0, 1, meses)
+    y = (1 / (1 + np.exp(-10*(x-0.5)))) * total
+    return np.diff(y, prepend=0)
 
-def calcular_resultados_finais(params, fluxo_caixa, oportunidades_agio):
-    vgv = params['vgv']
-    custo_construcao = vgv * (params['custo_construcao_percentual'] / 100)
-    
-    receita_total = fluxo_caixa['Receitas'].sum()
-    custo_total = fluxo_caixa['Custos'].sum()
-    agio_total = oportunidades_agio['Ágio Potencial'].sum()
-    
-    lucro_operacional = vgv - custo_construcao
-    lucro_total = lucro_operacional + agio_total
+def calcular_metricas(fluxo_caixa, params):
+    vpl = np.npv(params['taxa_juros_aplicacao'] / 100 / 12, fluxo_caixa['Saldo'])
+    tir = np.irr(fluxo_caixa['Saldo'])
+    payback = np.where(fluxo_caixa['Saldo'] > 0)[0][0] if any(fluxo_caixa['Saldo'] > 0) else None
+    max_exposicao = fluxo_caixa['Saldo'].min()
     
     return {
-        'VGV': vgv,
-        'Custo de Construção': custo_construcao,
-        'Lucro Operacional': lucro_operacional,
-        'Ágio Total': agio_total,
-        'Lucro Total': lucro_total,
-        'Margem Operacional': (lucro_operacional / vgv) * 100,
-        'Margem Total': (lucro_total / vgv) * 100
+        'VPL': vpl,
+        'TIR Mensal': tir,
+        'TIR Anual': (1 + tir)**12 - 1 if tir else None,
+        'Payback (meses)': payback,
+        'Máxima Exposição de Caixa': max_exposicao
     }
 
-def display_results(results, params):
-    st.header("Resultados da Análise")
-
-    # Exibir gráfico de fluxo de caixa
+def display_results(fluxo_caixa, metricas, params):
     st.subheader("Fluxo de Caixa do Projeto")
-    plot_fluxo_caixa(results["Fluxo de Caixa"])
-
-    # Exibir oportunidades de ágio
-    st.subheader("Oportunidades de Ágio")
-    plot_oportunidades_agio(results["Oportunidades de Ágio"])
-
-    # Exibir resultados finais
-    st.subheader("Resultados Financeiros")
-    display_resultados_finais(results["Resultados Finais"])
-
-def plot_fluxo_caixa(fluxo_caixa):
+    st.dataframe(fluxo_caixa)
+    
+    st.subheader("Gráfico do Fluxo de Caixa")
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(fluxo_caixa.index, fluxo_caixa['Saldo'], label='Saldo Acumulado')
     ax.bar(fluxo_caixa.index, fluxo_caixa['Receitas'], alpha=0.3, label='Receitas')
-    ax.bar(fluxo_caixa.index, -fluxo_caixa['Custos'], alpha=0.3, label='Custos')
+    ax.bar(fluxo_caixa.index, -fluxo_caixa['Custos Construção'], alpha=0.3, label='Custos Construção')
     ax.set_xlabel('Meses')
     ax.set_ylabel('Valor (R$ milhões)')
     ax.legend()
     st.pyplot(fig)
-
-def plot_oportunidades_agio(oportunidades_agio):
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.bar(oportunidades_agio['Mês'], oportunidades_agio['Ágio Potencial'])
-    ax.set_xlabel('Meses')
-    ax.set_ylabel('Ágio Potencial (R$ milhões)')
-    st.pyplot(fig)
-
-def display_resultados_finais(resultados):
-    st.table(pd.DataFrame([resultados]).T)
+    
+    st.subheader("Métricas Financeiras")
+    for metrica, valor in metricas.items():
+        st.write(f"{metrica}: {valor:.2f}" if isinstance(valor, float) else f"{metrica}: {valor}")
+    
+    st.subheader("Insights de Gestão de Fluxo de Caixa")
+    eficiencia_caixa = (fluxo_caixa['Saldo'] >= 0).mean() * 100
+    st.write(f"Eficiência de Caixa: {eficiencia_caixa:.2f}% dos meses com saldo positivo")
+    
+    meses_negativos = (fluxo_caixa['Saldo'] < 0).sum()
+    st.write(f"Meses com Caixa Negativo: {meses_negativos}")
+    
+    juros_totais = fluxo_caixa['Juros'].sum()
+    st.write(f"Total de Juros: R$ {juros_totais:.2f} milhões")
+    
+    if juros_totais > 0:
+        st.write("Oportunidade: Considere estratégias para reduzir períodos de caixa negativo e minimizar custos de financiamento.")
+    else:
+        st.write("Oportunidade: Explore opções para maximizar o rendimento do caixa positivo.")
+    
+    velocidade_vendas_real = params['velocidade_vendas']
+    velocidade_vendas_ideal = (params['vgv'] / 0.5) / params['prazo_meses']
+    if velocidade_vendas_real < velocidade_vendas_ideal:
+        st.write(f"Alerta: A velocidade de vendas atual ({velocidade_vendas_real:.2f} unidades/mês) está abaixo do ideal ({velocidade_vendas_ideal:.2f} unidades/mês) para o prazo do projeto.")
+    
+    st.write("Recomendações:")
+    st.write("1. Monitore de perto a curva de vendas e ajuste as estratégias de marketing conforme necessário.")
+    st.write("2. Considere negociar com fornecedores para alinhar os pagamentos com o fluxo de receitas.")
+    st.write("3. Avalie a possibilidade de adiantar recebíveis em períodos de caixa negativo.")
+    st.write("4. Mantenha uma reserva de contingência para lidar com flutuações imprevistas no fluxo de caixa.")
 
 if __name__ == "__main__":
     main()
