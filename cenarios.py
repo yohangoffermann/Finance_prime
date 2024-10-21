@@ -9,27 +9,22 @@ def calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percen
     fluxo['Receitas'].iloc[1:] = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
     fluxo['Custos'] = custo_construcao / prazo_meses
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
+    fluxo['Saldo Acumulado'] = fluxo['Saldo'].cumsum()
     return fluxo
 
 def calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentual, taxa_juros, percentual_financiado):
     fluxo = pd.DataFrame(index=range(prazo_meses), columns=['Receitas', 'Custos', 'Saldo'])
     
-    # Entrada
     fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
-    
-    # Distribuição das receitas restantes
     receita_mensal = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
     fluxo['Receitas'].iloc[1:] = receita_mensal
     
-    # Custos de construção
     custo_mensal = custo_construcao / prazo_meses
     fluxo['Custos'] = custo_mensal
     
-    # Financiamento
     valor_financiado = custo_construcao * percentual_financiado
-    fluxo.loc[0, 'Receitas'] += valor_financiado  # Recebimento do financiamento
+    fluxo.loc[0, 'Receitas'] += valor_financiado
     
-    # Cálculo dos juros e amortização
     taxa_mensal = (1 + taxa_juros) ** (1/12) - 1
     parcela = valor_financiado * (taxa_mensal * (1 + taxa_mensal) ** prazo_meses) / ((1 + taxa_mensal) ** prazo_meses - 1)
     
@@ -41,6 +36,7 @@ def calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentu
         saldo_devedor -= amortizacao
     
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
+    fluxo['Saldo Acumulado'] = fluxo['Saldo'].cumsum()
     return fluxo
 
 def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic, taxa_admin_consorcio):
@@ -48,31 +44,26 @@ def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual,
     lance = custo_construcao * lance_percentual
     credito_consorcio = custo_construcao - lance
     
-    # Recebimento inicial (crédito do consórcio + entrada com ágio)
     fluxo.loc[0, 'Receitas'] = credito_consorcio + (vgv * entrada_percentual * (1 + agio_percentual))
     fluxo.loc[0, 'Custos'] = lance
     
-    # Custos de construção distribuídos linearmente
     custo_mensal_construcao = custo_construcao / prazo_meses
     fluxo['Custos'] = custo_mensal_construcao
     
-    # Cálculo das parcelas do consórcio
     amortizacao_mensal = credito_consorcio / prazo_meses
     taxa_admin_mensal = (taxa_admin_consorcio / 100 / 12) * credito_consorcio
     parcela_consorcio = amortizacao_mensal + taxa_admin_mensal
     
-    # Adicionar parcelas do consórcio aos custos mensais
     fluxo['Custos'] += parcela_consorcio
     
-    # Receitas das vendas distribuídas (com ágio)
     receita_mensal = (vgv * (1 - entrada_percentual) * (1 + agio_percentual)) / (prazo_meses - 1)
     fluxo['Receitas'].iloc[1:] = receita_mensal
     
-    # Rendimento Selic sobre o lance
     rendimento_selic = lance * ((1 + taxa_selic)**(prazo_meses/12) - 1)
     fluxo.loc[prazo_meses-1, 'Receitas'] += rendimento_selic
     
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
+    fluxo['Saldo Acumulado'] = fluxo['Saldo'].cumsum()
     return fluxo
 
 st.title('Comparativo de Cenários de Incorporação Imobiliária')
@@ -94,18 +85,10 @@ fluxo_auto = calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entra
 fluxo_financiamento = calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentual, taxa_juros, percentual_financiado)
 fluxo_constructa = calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic, taxa_admin_consorcio)
 
-# Logging para debug
-st.write("Fluxo Auto Financiado:")
-st.write(fluxo_auto)
-st.write("Fluxo Financiamento Tradicional:")
-st.write(fluxo_financiamento)
-st.write("Fluxo Constructa:")
-st.write(fluxo_constructa)
-
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=fluxo_auto.index, y=fluxo_auto['Saldo'].cumsum(), mode='lines', name='Auto Financiado'))
-fig.add_trace(go.Scatter(x=fluxo_financiamento.index, y=fluxo_financiamento['Saldo'].cumsum(), mode='lines', name='Financiamento Tradicional'))
-fig.add_trace(go.Scatter(x=fluxo_constructa.index, y=fluxo_constructa['Saldo'].cumsum(), mode='lines', name='Constructa'))
+fig.add_trace(go.Scatter(x=fluxo_auto.index, y=fluxo_auto['Saldo Acumulado'], mode='lines', name='Auto Financiado'))
+fig.add_trace(go.Scatter(x=fluxo_financiamento.index, y=fluxo_financiamento['Saldo Acumulado'], mode='lines', name='Financiamento Tradicional'))
+fig.add_trace(go.Scatter(x=fluxo_constructa.index, y=fluxo_constructa['Saldo Acumulado'], mode='lines', name='Constructa'))
 fig.update_layout(title='Comparativo de Fluxo de Caixa', xaxis_title='Meses', yaxis_title='Saldo Acumulado (R$ milhões)')
 
 st.plotly_chart(fig)
@@ -118,7 +101,7 @@ results = pd.DataFrame({
     'Margem Bruta (%)': [(fluxo_auto['Saldo'].sum() / fluxo_auto['Receitas'].sum()) * 100,
                          (fluxo_financiamento['Saldo'].sum() / fluxo_financiamento['Receitas'].sum()) * 100,
                          (fluxo_constructa['Saldo'].sum() / fluxo_constructa['Receitas'].sum()) * 100],
-    'Exposição Máxima (milhões R$)': [-fluxo_auto['Saldo'].cumsum().min(), -fluxo_financiamento['Saldo'].cumsum().min(), -fluxo_constructa['Saldo'].cumsum().min()]
+    'Exposição Máxima (milhões R$)': [-fluxo_auto['Saldo Acumulado'].min(), -fluxo_financiamento['Saldo Acumulado'].min(), -fluxo_constructa['Saldo Acumulado'].min()]
 })
 
 st.write(results)
