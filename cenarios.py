@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses, 
                                    percentual_inicio, percentual_meio, percentual_fim,
@@ -99,48 +98,60 @@ def calcular_fluxo_financiado(vgv, custo_construcao, prazo_meses,
 def mostrar_grafico(fluxo):
     st.subheader('Gráfico de Fluxo de Caixa')
     
-    # Criar subplots: um para barras empilhadas, outro para linha
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02, row_heights=[0.7, 0.3])
+    fig = go.Figure()
     
     # Adicionar barras para Receitas
-    fig.add_trace(
-        go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', marker_color='green'),
-        row=1, col=1
-    )
+    fig.add_trace(go.Bar(
+        x=fluxo['Mês'], 
+        y=fluxo['Receitas'], 
+        name='Receitas', 
+        marker_color='green'
+    ))
     
     # Adicionar barras para Custos (valores negativos)
-    fig.add_trace(
-        go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', marker_color='red'),
-        row=1, col=1
-    )
+    fig.add_trace(go.Bar(
+        x=fluxo['Mês'], 
+        y=-fluxo['Custos'], 
+        name='Custos', 
+        marker_color='red'
+    ))
     
     # Adicionar barras para Financiamento, se existir
     if 'Financiamento' in fluxo.columns:
-        fig.add_trace(
-            go.Bar(x=fluxo['Mês'], y=fluxo['Financiamento'], name='Financiamento', marker_color='orange'),
-            row=1, col=1
-        )
+        fig.add_trace(go.Bar(
+            x=fluxo['Mês'], 
+            y=fluxo['Financiamento'], 
+            name='Financiamento', 
+            marker_color='orange'
+        ))
     
-    # Adicionar linha para Saldo Acumulado no subplot inferior
-    fig.add_trace(
-        go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', mode='lines', line=dict(color='blue', width=2)),
-        row=2, col=1
-    )
+    # Adicionar linha para Saldo Acumulado
+    fig.add_trace(go.Scatter(
+        x=fluxo['Mês'], 
+        y=fluxo['Saldo Acumulado'], 
+        name='Saldo Acumulado', 
+        mode='lines', 
+        line=dict(color='blue', width=2),
+        yaxis='y2'
+    ))
     
     # Atualizar layout
     fig.update_layout(
         title='Fluxo de Caixa ao Longo do Tempo',
+        xaxis_title='Mês',
+        yaxis_title='Valores (milhões R$)',
+        yaxis2=dict(
+            title='Saldo Acumulado (milhões R$)',
+            overlaying='y',
+            side='right'
+        ),
         barmode='relative',
-        height=700,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=50, r=50, t=80, b=50)
+        margin=dict(l=50, r=50, t=80, b=50),
+        height=600
     )
-    
-    fig.update_xaxes(title_text="Mês", row=2, col=1)
-    fig.update_yaxes(title_text="Valores (milhões R$)", row=1, col=1)
-    fig.update_yaxes(title_text="Saldo Acumulado (milhões R$)", row=2, col=1)
 
-    # Adicionar linha horizontal em y=0 no gráfico de Saldo Acumulado
+    # Adicionar linha horizontal em y=0
     fig.add_shape(
         type="line",
         x0=fluxo['Mês'].min(),
@@ -148,7 +159,6 @@ def mostrar_grafico(fluxo):
         x1=fluxo['Mês'].max(),
         y1=0,
         line=dict(color="black", width=1, dash="dash"),
-        row=2, col=1
     )
 
     # Exibir o gráfico
@@ -236,6 +246,7 @@ def aba_financiamento_tradicional():
         vgv = st.number_input('VGV (Valor Geral de Vendas) em milhões R$', value=35.0, step=0.1, key='vgv_fin')
         custo_construcao_percentual = st.slider('Custo de Construção (% do VGV)', 50, 90, 70, key='custo_fin')
         prazo_meses = st.number_input('Prazo de Construção (meses)', value=48, step=1, key='prazo_fin')
+
     with col2:
         st.subheader("Distribuição dos Custos")
         percentual_inicio = st.slider('% Custos no Início da Obra', 0, 100, 30, key='custo_inicio_fin')
