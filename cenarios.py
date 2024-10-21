@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 
 def calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percentual):
@@ -32,22 +31,6 @@ def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual,
     fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
-def calculate_irr(cashflows):
-    def npv(rate):
-        return sum(cf / (1 + rate) ** (i+1) for i, cf in enumerate(cashflows))
-    
-    low = -0.99
-    high = 1.0
-    for _ in range(100):
-        mid = (low + high) / 2
-        if abs(npv(mid)) < 1e-6:
-            return mid
-        if npv(mid) > 0:
-            low = mid
-        else:
-            high = mid
-    return None  # If no solution is found
-
 st.title('Comparativo de Cenários de Incorporação Imobiliária')
 
 vgv = st.sidebar.number_input('VGV (milhões R$)', value=35.0, step=0.1)
@@ -76,13 +59,36 @@ st.plotly_chart(fig)
 
 results = pd.DataFrame({
     'Cenário': ['Auto Financiado', 'Financiamento Tradicional', 'Constructa'],
-    'Lucro Final (milhões R$)': [fluxo_auto['Saldo'].sum(), fluxo_financiamento['Saldo'].sum(), fluxo_constructa['Saldo'].sum()],
-    'Exposição Máxima (milhões R$)': [-fluxo_auto['Saldo'].cumsum().min(), -fluxo_financiamento['Saldo'].cumsum().min(), -fluxo_constructa['Saldo'].cumsum().min()],
-    'TIR Mensal (%)': [calculate_irr(fluxo_auto['Saldo']) * 100, 
-                       calculate_irr(fluxo_financiamento['Saldo']) * 100, 
-                       calculate_irr(fluxo_constructa['Saldo']) * 100]
+    'Receita Total (milhões R$)': [fluxo_auto['Receitas'].sum(), fluxo_financiamento['Receitas'].sum(), fluxo_constructa['Receitas'].sum()],
+    'Custo Total (milhões R$)': [fluxo_auto['Custos'].sum(), fluxo_financiamento['Custos'].sum(), fluxo_constructa['Custos'].sum()],
+    'Lucro Bruto (milhões R$)': [fluxo_auto['Saldo'].sum(), fluxo_financiamento['Saldo'].sum(), fluxo_constructa['Saldo'].sum()],
+    'Margem Bruta (%)': [(fluxo_auto['Saldo'].sum() / fluxo_auto['Receitas'].sum()) * 100,
+                         (fluxo_financiamento['Saldo'].sum() / fluxo_financiamento['Receitas'].sum()) * 100,
+                         (fluxo_constructa['Saldo'].sum() / fluxo_constructa['Receitas'].sum()) * 100],
+    'Exposição Máxima (milhões R$)': [-fluxo_auto['Saldo'].cumsum().min(), -fluxo_financiamento['Saldo'].cumsum().min(), -fluxo_constructa['Saldo'].cumsum().min()]
 })
 
-results['TIR Anual (%)'] = (1 + results['TIR Mensal (%)'] / 100) ** 12 - 1
-
 st.write(results)
+
+# Gráfico de barras para comparar margens brutas
+fig_margin = go.Figure(data=[
+    go.Bar(name='Margem Bruta (%)', x=results['Cenário'], y=results['Margem Bruta (%)'])
+])
+fig_margin.update_layout(title='Comparativo de Margem Bruta por Cenário')
+st.plotly_chart(fig_margin)
+
+# Análise adicional
+st.subheader("Análise Comparativa")
+melhor_margem = results.loc[results['Margem Bruta (%)'].idxmax(), 'Cenário']
+menor_exposicao = results.loc[results['Exposição Máxima (milhões R$)'].idxmin(), 'Cenário']
+
+st.write(f"O cenário com a melhor margem bruta é: {melhor_margem}")
+st.write(f"O cenário com a menor exposição máxima de caixa é: {menor_exposicao}")
+
+diferenca_margem = results['Margem Bruta (%)'].max() - results['Margem Bruta (%)'].min()
+st.write(f"A diferença entre a maior e a menor margem bruta é de {diferenca_margem:.2f} pontos percentuais.")
+
+st.write("Considerações:")
+st.write("1. O modelo Auto Financiado geralmente oferece a maior margem bruta, mas pode requerer maior capital próprio.")
+st.write("2. O Financiamento Tradicional pode reduzir a necessidade de capital próprio, mas os juros impactam a margem.")
+st.write("3. O modelo Constructa busca equilibrar a necessidade de capital com potencial de ganho através do ágio.")
