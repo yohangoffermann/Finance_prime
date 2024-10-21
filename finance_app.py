@@ -10,6 +10,8 @@ def calculate_payments(principal, months, admin_fee, dropdowns, agio):
     amortization = principal / months
     payments = []
     balances = [principal]
+    total_dropdown_value = 0
+    total_agio = 0
     
     for month in range(1, months + 1):
         if month % 12 == 0 and month > 1:
@@ -18,8 +20,10 @@ def calculate_payments(principal, months, admin_fee, dropdowns, agio):
         
         if month in dropdowns:
             dropdown_value = dropdowns[month]
-            dropdown_impact = dropdown_value * (1 + agio/100)
-            balance -= dropdown_impact
+            agio_value = dropdown_value * (agio/100)
+            total_dropdown_value += dropdown_value
+            total_agio += agio_value
+            balance -= (dropdown_value + agio_value)
             amortization = balance / (months - month + 1)
         
         admin_fee_value = balance * admin_fee
@@ -32,7 +36,7 @@ def calculate_payments(principal, months, admin_fee, dropdowns, agio):
         if balance <= 0 or monthly_payment < 500:
             break
     
-    return payments, balances
+    return payments, balances, total_dropdown_value, total_agio
 
 def main():
     st.title("Simulador Constructa")
@@ -40,18 +44,18 @@ def main():
     # Sidebar
     with st.sidebar:
         principal = st.number_input("Valor do Crédito (R$)", min_value=10000, value=5000000, step=10000)
-        months = st.number_input("Prazo (meses)", min_value=12, value=210, step=12)
+        months = st.number_input("Prazo (meses)", min_value=12, value=240, step=12)
         admin_fee = st.number_input("Taxa de Administração Mensal (%)", min_value=0.1, value=0.12, step=0.01) / 100
         agio = st.number_input("Ágio dos Dropdowns (%)", min_value=0.0, value=25.0, step=1.0)
-        tlr = st.number_input("Taxa Livre de Risco (% a.a.)", min_value=0.0, value=10.75, step=0.1) / 100
+        tlr = st.number_input("Taxa Livre de Risco (% a.a.)", min_value=0.0, value=11.00, step=0.1) / 100
 
     # Inicialização dos dropdowns
     if 'dropdowns' not in st.session_state:
         st.session_state.dropdowns = {}
 
     # Cálculos
-    payments_with_drops, balances_with_drops = calculate_payments(principal, months, admin_fee, st.session_state.dropdowns, agio)
-    payments_no_drops, balances_no_drops = calculate_payments(principal, months, admin_fee, {}, agio)
+    payments_with_drops, balances_with_drops, total_dropdown_value, total_agio = calculate_payments(principal, months, admin_fee, st.session_state.dropdowns, agio)
+    payments_no_drops, balances_no_drops, _, _ = calculate_payments(principal, months, admin_fee, {}, agio)
 
     # Determinar o mês do último dropdown
     last_dropdown_month = max(st.session_state.dropdowns.keys()) if st.session_state.dropdowns else months
@@ -75,11 +79,9 @@ def main():
     with col3:
         st.write("KPIs")
         p_cl = payments_with_drops[0] / principal * 100
-        p_dn = payments_with_drops[0] / (principal - sum(st.session_state.dropdowns.values())) * 100 if st.session_state.dropdowns else p_cl
         cet_total = (sum(payments_with_drops) / principal - 1) * 100
         cet_anual = ((1 + cet_total/100) ** (12/months) - 1) * 100
         st.metric("P/CL", f"{p_cl:.2f}%")
-        st.metric("P/DN", f"{p_dn:.2f}%")
         st.metric("CET Total", f"{cet_total:.2f}%")
         st.metric("CET Anual", f"{cet_anual:.2f}%")
 
@@ -131,15 +133,16 @@ def main():
     # Análise de Arbitragem
     st.subheader("Análise de Arbitragem")
     valor_captado = principal
-    valor_quitacao = sum(payments_with_drops) + sum(st.session_state.dropdowns.values())
-    ganho_arbitragem = valor_captado - valor_quitacao
-    roi = (ganho_arbitragem / sum(st.session_state.dropdowns.values()) - 1) * 100 if st.session_state.dropdowns else 0
+    valor_quitacao = sum(payments_with_drops) + total_dropdown_value
+    ganho_arbitragem = (valor_captado + total_agio) - valor_quitacao
+    roi = (total_agio / total_dropdown_value) * 100 if total_dropdown_value > 0 else 0
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("Valor Captado", f"R$ {valor_captado/1e6:.2f}M")
     col2.metric("Valor Quitação", f"R$ {valor_quitacao/1e6:.2f}M")
-    col3.metric("Ganho na Arbitragem", f"R$ {ganho_arbitragem/1e6:.2f}M")
-    col4.metric("ROI da Estratégia", f"{roi:.2f}%")
+    col3.metric("Ganho com Ágio", f"R$ {total_agio/1e6:.2f}M")
+    col4.metric("Ganho na Arbitragem", f"R$ {ganho_arbitragem/1e6:.2f}M")
+    col5.metric("ROI da Estratégia", f"{roi:.2f}%")
 
 if __name__ == "__main__":
     main()
