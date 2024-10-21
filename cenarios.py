@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses, 
                                    percentual_inicio, percentual_meio, percentual_fim,
@@ -89,21 +90,61 @@ def calcular_fluxo_financiado(vgv, custo_construcao, prazo_meses,
 
 def mostrar_grafico(fluxo):
     st.subheader('Gráfico de Fluxo de Caixa')
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', marker_color='green'))
-    fig.add_trace(go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', marker_color='red'))
+    
+    # Criar subplots: um para barras empilhadas, outro para linha
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.02, row_heights=[0.7, 0.3])
+    
+    # Adicionar barras para Receitas
+    fig.add_trace(
+        go.Bar(x=fluxo['Mês'], y=fluxo['Receitas'], name='Receitas', marker_color='green'),
+        row=1, col=1
+    )
+    
+    # Adicionar barras para Custos (valores negativos)
+    fig.add_trace(
+        go.Bar(x=fluxo['Mês'], y=-fluxo['Custos'], name='Custos', marker_color='red'),
+        row=1, col=1
+    )
+    
+    # Adicionar barras para Financiamento, se existir
     if 'Financiamento' in fluxo.columns:
-        fig.add_trace(go.Bar(x=fluxo['Mês'], y=fluxo['Financiamento'], name='Financiamento', marker_color='orange'))
-    fig.add_trace(go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', mode='lines', line=dict(color='blue', width=2)))
-
+        fig.add_trace(
+            go.Bar(x=fluxo['Mês'], y=fluxo['Financiamento'], name='Financiamento', marker_color='orange'),
+            row=1, col=1
+        )
+    
+    # Adicionar linha para Saldo Acumulado no subplot inferior
+    fig.add_trace(
+        go.Scatter(x=fluxo['Mês'], y=fluxo['Saldo Acumulado'], name='Saldo Acumulado', mode='lines', line=dict(color='blue', width=2)),
+        row=2, col=1
+    )
+    
+    # Atualizar layout
     fig.update_layout(
         title='Fluxo de Caixa ao Longo do Tempo',
-        xaxis_title='Mês',
-        yaxis_title='Valor (milhões R$)',
-        barmode='relative'
+        barmode='relative',
+        height=700,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=50, r=50, t=80, b=50)
+    )
+    
+    fig.update_xaxes(title_text="Mês", row=2, col=1)
+    fig.update_yaxes(title_text="Valores (milhões R$)", row=1, col=1)
+    fig.update_yaxes(title_text="Saldo Acumulado (milhões R$)", row=2, col=1)
+
+    # Adicionar linha horizontal em y=0 no gráfico de Saldo Acumulado
+    fig.add_shape(
+        type="line",
+        x0=fluxo['Mês'].min(),
+        y0=0,
+        x1=fluxo['Mês'].max(),
+        y1=0,
+        line=dict(color="black", width=1, dash="dash"),
+        row=2, col=1
     )
 
-    st.plotly_chart(fig)
+    # Exibir o gráfico
+    st.plotly_chart(fig, use_container_width=True)
 
 def aba_auto_financiado():
     st.header("Modelo Auto Financiado")
