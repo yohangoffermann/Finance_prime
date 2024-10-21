@@ -30,7 +30,8 @@ def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual,
     fluxo.loc[0, 'Custos'] = lance
     
     # Custos de construção distribuídos linearmente
-    fluxo['Custos'] += custo_construcao / prazo_meses
+    custo_mensal_construcao = custo_construcao / prazo_meses
+    fluxo['Custos'] = custo_mensal_construcao
     
     # Cálculo das parcelas do consórcio
     amortizacao_mensal = credito_consorcio / prazo_meses
@@ -41,7 +42,8 @@ def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual,
     fluxo['Custos'] += parcela_consorcio
     
     # Receitas das vendas distribuídas (com ágio)
-    fluxo['Receitas'].iloc[1:] += (vgv * (1 - entrada_percentual) * (1 + agio_percentual)) / (prazo_meses - 1)
+    receita_mensal = (vgv * (1 - entrada_percentual) * (1 + agio_percentual)) / (prazo_meses - 1)
+    fluxo['Receitas'].iloc[1:] = receita_mensal
     
     # Rendimento Selic sobre o lance
     rendimento_selic = lance * ((1 + taxa_selic)**(prazo_meses/12) - 1)
