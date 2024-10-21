@@ -229,3 +229,23 @@ def comparar_fluxos(fluxo_original, fluxo_otimizado):
 
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(fluxo_original.index, fluxo_original['Saldo'], label='Saldo Original', color='blue')
+    ax.plot(fluxo_otimizado.index, fluxo_otimizado['Saldo Otimizado'], label='Saldo Otimizado', color='red', linestyle='--')
+    ax.set_xlabel('Meses')
+    ax.set_ylabel('Valor (R$ milhões)')
+    ax.legend()
+    plt.tight_layout()
+    st.pyplot(fig)
+
+    melhoria_exposicao = fluxo_otimizado['Saldo Otimizado'].min() - fluxo_original['Saldo'].min()
+    st.write(f"Melhoria na Exposição Máxima de Caixa: R$ {melhoria_exposicao:.2f} milhões")
+
+    meses_negativos_original = (fluxo_original['Saldo'] < 0).sum()
+    meses_negativos_otimizado = (fluxo_otimizado['Saldo Otimizado'] < 0).sum()
+    st.write(f"Redução de Meses com Caixa Negativo: {meses_negativos_original - meses_negativos_otimizado}")
+
+    # Adicionar informações sobre o ágio total gerado
+    agio_total = fluxo_otimizado['Receitas Consórcio'].sum()
+    st.write(f"Ágio Total Gerado: R$ {agio_total:.2f} milhões")
+
+if __name__ == "__main__":
+    main()
