@@ -127,20 +127,70 @@ def display_results(fluxo_caixa, params):
     st.write(f"Prazo de construção: {params['prazo_meses']} meses")
     st.write(f"Prazo das parcelas: {params['prazo_parcelas']} meses")
 
+def calcular_parcela_consorcio(valor_consorcio, prazo_meses, taxa_administracao_percentual):
+    valor_credito_mensal = valor_consorcio / prazo_meses
+    taxa_administracao = (valor_consorcio * taxa_administracao_percentual / 100) / prazo_meses
+    
+    return valor_credito_mensal + taxa_administracao
+
+def simular_uso_consorcio(fluxo_caixa, oportunidades_agio, valor_consorcio, params):
+    fluxo_otimizado = fluxo_caixa.copy()
+    saldo_consorcio = valor_consorcio
+
+    prazo_consorcio = params['prazo_meses']
+    taxa_administracao = params['taxa_administracao']
+
+    valor_parcela_consorcio = calcular_parcela_consorcio(
+        valor_consorcio, prazo_consorcio, taxa_administracao
+    )
+
+    fluxo_otimizado['Receitas Consórcio'] = 0
+    fluxo_otimizado['Custos Consórcio'] = 0
+
+    for mes in range(prazo_consorcio):
+        # Adicionar o custo da parcela do consórcio
+        fluxo_otimizado.loc[mes, 'Custos Consórcio'] = valor_parcela_consorcio
+
+        # Verificar oportunidades de ágio
+        oportunidade = oportunidades_agio[oportunidades_agio['Mês'] == mes]
+        if not oportunidade.empty:
+            agio = oportunidade['Potencial de Ágio'].values[0]
+            fluxo_otimizado.loc[mes, 'Receitas Consórcio'] += agio
+
+        # Usar o consórcio para cobrir saldo negativo, se necessário
+        saldo_mes = fluxo_otimizado.loc[mes, 'Saldo'] - fluxo_otimizado.loc[mes, 'Custos Consórcio']
+        if saldo_mes < 0 and saldo_consorcio > 0:
+            valor_utilizado = min(-saldo_mes, saldo_consorcio)
+            fluxo_otimizado.loc[mes, 'Receitas Consórcio'] += valor_utilizado
+            saldo_consorcio -= valor_utilizado
+
+    # Calcular o novo saldo considerando as receitas e custos do consórcio
+    fluxo_otimizado['Saldo Otimizado'] = (
+        fluxo_otimizado['Saldo'] + 
+        fluxo_otimizado['Receitas Consórcio'].cumsum() - 
+        fluxo_otimizado['Custos Consórcio'].cumsum()
+    )
+
+    return fluxo_otimizado
+
 def ferramenta_constructa(fluxo_caixa, params):
     st.subheader("Ferramenta Constructa")
 
     # Parâmetros específicos do Constructa
     percentual_consorcio = st.slider("Percentual do VGV para Consórcio", 50, 100, 70)
     percentual_agio = st.slider("Percentual de Ágio Esperado", 5, 30, 10)
+    taxa_administracao = st.slider("Taxa de Administração Mensal (%)", 0.1, 1.0, 0.5, step=0.1)
 
     valor_consorcio = params['vgv'] * (percentual_consorcio / 100)
+    
+    # Adicionar este parâmetro ao dicionário params
+    params['taxa_administracao'] = taxa_administracao
     
     # Identificar oportunidades de ágio
     oportunidades_agio = identificar_oportunidades_agio(fluxo_caixa, params, percentual_agio)
 
     # Simular uso do consórcio
-    fluxo_otimizado = simular_uso_consorcio(fluxo_caixa, oportunidades_agio, valor_consorcio)
+    fluxo_otimizado = simular_uso_consorcio(fluxo_caixa, oportunidades_agio, valor_consorcio, params)
 
     # Exibir resultados
     st.write("Oportunidades de Ágio Identificadas:")
@@ -155,6 +205,7 @@ def ferramenta_constructa(fluxo_caixa, params):
     # Informações adicionais de debug
     st.write("Detalhes do Fluxo Otimizado:")
     st.write(f"Soma das Receitas Consórcio: R$ {fluxo_otimizado['Receitas Consórcio'].sum():.2f} milhões")
+    st.write(f"Soma dos Custos Consórcio: R$ {fluxo_otimizado['Custos Consórcio'].sum():.2f} milhões")
     st.write(f"Diferença entre Saldo Original e Otimizado no último mês: R$ {(fluxo_otimizado['Saldo Otimizado'].iloc[-1] - fluxo_caixa['Saldo'].iloc[-1]):.2f} milhões")
 
     return fluxo_otimizado
@@ -173,51 +224,8 @@ def identificar_oportunidades_agio(fluxo_caixa, params, percentual_agio):
 
     return pd.DataFrame(oportunidades)
 
-def simular_uso_consorcio(fluxo_caixa, oportunidades_agio, valor_consorcio):
-    fluxo_otimizado = fluxo_caixa.copy()
-    saldo_consorcio = valor_consorcio
-
-    fluxo_otimizado['Receitas Consórcio'] = 0
-    for _, oportunidade in oportunidades_agio.iterrows():
-        mes = oportunidade['Mês']
-        agio = oportunidade['Potencial de Ágio']
-        
-        # Adicionar o ágio como receita adicional
-        fluxo_otimizado.loc[mes, 'Receitas Consórcio'] += agio
-        
-        # Usar o consórcio para cobrir saldo negativo, se necessário
-        if fluxo_otimizado.loc[mes, 'Saldo'] < 0 and saldo_consorcio > 0:
-            valor_utilizado = min(-fluxo_otimizado.loc[mes, 'Saldo'], saldo_consorcio)
-            fluxo_otimizado.loc[mes, 'Receitas Consórcio'] += valor_utilizado
-            saldo_consorcio -= valor_utilizado
-
-    fluxo_otimizado['Saldo Otimizado'] = (fluxo_otimizado['Saldo'] + 
-                                          fluxo_otimizado['Receitas Consórcio'].cumsum())
-
-    return fluxo_otimizado
-
 def comparar_fluxos(fluxo_original, fluxo_otimizado):
     st.subheader("Comparação de Fluxos de Caixa")
 
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.plot(fluxo_original.index, fluxo_original['Saldo'], label='Saldo Original', color='blue')
-    ax.plot(fluxo_otimizado.index, fluxo_otimizado['Saldo Otimizado'], label='Saldo Otimizado', color='red', linestyle='--')
-    ax.set_xlabel('Meses')
-    ax.set_ylabel('Valor (R$ milhões)')
-    ax.legend()
-    plt.tight_layout()
-    st.pyplot(fig)
-
-    melhoria_exposicao = fluxo_otimizado['Saldo Otimizado'].min() - fluxo_original['Saldo'].min()
-    st.write(f"Melhoria na Exposição Máxima de Caixa: R$ {melhoria_exposicao:.2f} milhões")
-
-    meses_negativos_original = (fluxo_original['Saldo'] < 0).sum()
-    meses_negativos_otimizado = (fluxo_otimizado['Saldo Otimizado'] < 0).sum()
-    st.write(f"Redução de Meses com Caixa Negativo: {meses_negativos_original - meses_negativos_otimizado}")
-
-    # Adicionar informações sobre o ágio total gerado
-    agio_total = fluxo_otimizado['Receitas Consórcio'].sum()
-    st.write(f"Ágio Total Gerado: R$ {agio_total:.2f} milhões")
-
-if __name__ == "__main__":
-    main()
