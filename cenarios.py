@@ -8,7 +8,7 @@ def calculate_auto_financiado(vgv, custo_construcao, prazo_meses, entrada_percen
     fluxo['Custos'] = custo_construcao / prazo_meses
     fluxo.loc[0, 'Receitas'] = vgv * entrada_percentual
     fluxo['Receitas'].iloc[1:] = (vgv * (1 - entrada_percentual)) / (prazo_meses - 1)
-    fluxo['Saldo'] = fluxo['Receitas'].cumsum() - fluxo['Custos'].cumsum()
+    fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
 def calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentual, taxa_juros, percentual_financiado):
@@ -17,7 +17,7 @@ def calculate_financiamento(vgv, custo_construcao, prazo_meses, entrada_percentu
     juros_totais = valor_financiado * ((1 + taxa_juros)**(prazo_meses/12) - 1)
     fluxo.loc[0, 'Saldo'] += valor_financiado
     fluxo.loc[prazo_meses-1, 'Custos'] += valor_financiado + juros_totais
-    fluxo['Saldo'] = fluxo['Receitas'].cumsum() - fluxo['Custos'].cumsum()
+    fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
 def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic):
@@ -29,19 +29,23 @@ def calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual,
     fluxo['Receitas'].iloc[1:] = (vgv * (1 - entrada_percentual) * (1 + agio_percentual)) / (prazo_meses - 1)
     rendimento_selic = lance * ((1 + taxa_selic)**(prazo_meses/12) - 1)
     fluxo.loc[prazo_meses-1, 'Receitas'] += rendimento_selic
-    fluxo['Saldo'] = fluxo['Receitas'].cumsum() - fluxo['Custos'].cumsum()
+    fluxo['Saldo'] = fluxo['Receitas'] - fluxo['Custos']
     return fluxo
 
 def calculate_irr(cashflows):
     def npv(rate):
-        return sum(cf / (1 + rate) ** i for i, cf in enumerate(cashflows))
+        return sum(cf / (1 + rate) ** (i+1) for i, cf in enumerate(cashflows))
     
-    rate = 0.1  # Initial guess
-    for _ in range(100):  # Max iterations
-        new_rate = rate - npv(rate) / ((npv(rate + 0.0001) - npv(rate)) / 0.0001)
-        if abs(new_rate - rate) < 0.000001:
-            return new_rate
-        rate = new_rate
+    low = -0.99
+    high = 1.0
+    for _ in range(100):
+        mid = (low + high) / 2
+        if abs(npv(mid)) < 1e-6:
+            return mid
+        if npv(mid) > 0:
+            low = mid
+        else:
+            high = mid
     return None  # If no solution is found
 
 st.title('Comparativo de Cenários de Incorporação Imobiliária')
@@ -63,20 +67,22 @@ fluxo_financiamento = calculate_financiamento(vgv, custo_construcao, prazo_meses
 fluxo_constructa = calculate_constructa(vgv, custo_construcao, prazo_meses, entrada_percentual, lance_percentual, agio_percentual, taxa_selic)
 
 fig = go.Figure()
-fig.add_trace(go.Scatter(x=fluxo_auto.index, y=fluxo_auto['Saldo'], mode='lines', name='Auto Financiado'))
-fig.add_trace(go.Scatter(x=fluxo_financiamento.index, y=fluxo_financiamento['Saldo'], mode='lines', name='Financiamento Tradicional'))
-fig.add_trace(go.Scatter(x=fluxo_constructa.index, y=fluxo_constructa['Saldo'], mode='lines', name='Constructa'))
-fig.update_layout(title='Comparativo de Fluxo de Caixa', xaxis_title='Meses', yaxis_title='Saldo (R$ milhões)')
+fig.add_trace(go.Scatter(x=fluxo_auto.index, y=fluxo_auto['Saldo'].cumsum(), mode='lines', name='Auto Financiado'))
+fig.add_trace(go.Scatter(x=fluxo_financiamento.index, y=fluxo_financiamento['Saldo'].cumsum(), mode='lines', name='Financiamento Tradicional'))
+fig.add_trace(go.Scatter(x=fluxo_constructa.index, y=fluxo_constructa['Saldo'].cumsum(), mode='lines', name='Constructa'))
+fig.update_layout(title='Comparativo de Fluxo de Caixa', xaxis_title='Meses', yaxis_title='Saldo Acumulado (R$ milhões)')
 
 st.plotly_chart(fig)
 
 results = pd.DataFrame({
     'Cenário': ['Auto Financiado', 'Financiamento Tradicional', 'Constructa'],
-    'Lucro Final (milhões R$)': [fluxo_auto['Saldo'].iloc[-1], fluxo_financiamento['Saldo'].iloc[-1], fluxo_constructa['Saldo'].iloc[-1]],
-    'Exposição Máxima (milhões R$)': [-fluxo_auto['Saldo'].min(), -fluxo_financiamento['Saldo'].min(), -fluxo_constructa['Saldo'].min()],
-    'TIR (%)': [calculate_irr(fluxo_auto['Saldo']) * 12 * 100, 
-                calculate_irr(fluxo_financiamento['Saldo']) * 12 * 100, 
-                calculate_irr(fluxo_constructa['Saldo']) * 12 * 100]
+    'Lucro Final (milhões R$)': [fluxo_auto['Saldo'].sum(), fluxo_financiamento['Saldo'].sum(), fluxo_constructa['Saldo'].sum()],
+    'Exposição Máxima (milhões R$)': [-fluxo_auto['Saldo'].cumsum().min(), -fluxo_financiamento['Saldo'].cumsum().min(), -fluxo_constructa['Saldo'].cumsum().min()],
+    'TIR Mensal (%)': [calculate_irr(fluxo_auto['Saldo']) * 100, 
+                       calculate_irr(fluxo_financiamento['Saldo']) * 100, 
+                       calculate_irr(fluxo_constructa['Saldo']) * 100]
 })
+
+results['TIR Anual (%)'] = (1 + results['TIR Mensal (%)'] / 100) ** 12 - 1
 
 st.write(results)
