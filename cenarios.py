@@ -19,18 +19,22 @@ def calcular_fluxo_auto_financiado(vgv, custo_construcao, prazo_meses,
     fluxo['Custos'] = custos
     
     # Distribuição das receitas
-    fluxo.loc[0, 'Receitas'] = vgv * percentual_lancamento / 100  # Lançamento
+    fluxo['Receitas'] = 0
+    
+    # Lançamento
+    fluxo.loc[0, 'Receitas'] += vgv * percentual_lancamento / 100
     
     # Balões
-    num_baloes = 3  # Podemos ajustar isso se necessário
+    valor_baloes = vgv * percentual_baloes / 100
+    num_baloes = 3
     for i in range(1, num_baloes + 1):
         mes_balao = i * prazo_meses // (num_baloes + 1)
-        fluxo.loc[mes_balao, 'Receitas'] += vgv * (percentual_baloes / 100) / num_baloes
+        fluxo.loc[mes_balao, 'Receitas'] += valor_baloes / num_baloes
     
     # Parcelas
     valor_parcelas = vgv * percentual_parcelas / 100
-    parcela_mensal = valor_parcelas / prazo_parcelas
-    fluxo['Receitas'] += parcela_mensal
+    parcela_mensal = valor_parcelas / min(prazo_parcelas, prazo_meses)
+    fluxo.loc[:min(prazo_parcelas, prazo_meses)-1, 'Receitas'] += parcela_mensal
     
     fluxo['Saldo Mensal'] = fluxo['Receitas'] - fluxo['Custos']
     fluxo['Saldo Acumulado'] = fluxo['Saldo Mensal'].cumsum()
@@ -54,18 +58,22 @@ def calcular_fluxo_financiado(vgv, custo_construcao, prazo_meses,
     fluxo['Custos'] = custos
     
     # Distribuição das receitas
-    fluxo.loc[0, 'Receitas'] = vgv * percentual_lancamento / 100  # Lançamento
+    fluxo['Receitas'] = 0
+    
+    # Lançamento
+    fluxo.loc[0, 'Receitas'] += vgv * percentual_lancamento / 100
     
     # Balões
-    num_baloes = 3  # Podemos ajustar isso se necessário
+    valor_baloes = vgv * percentual_baloes / 100
+    num_baloes = 3
     for i in range(1, num_baloes + 1):
         mes_balao = i * prazo_meses // (num_baloes + 1)
-        fluxo.loc[mes_balao, 'Receitas'] += vgv * (percentual_baloes / 100) / num_baloes
+        fluxo.loc[mes_balao, 'Receitas'] += valor_baloes / num_baloes
     
     # Parcelas
     valor_parcelas = vgv * percentual_parcelas / 100
-    parcela_mensal = valor_parcelas / prazo_parcelas
-    fluxo['Receitas'] += parcela_mensal
+    parcela_mensal = valor_parcelas / min(prazo_parcelas, prazo_meses)
+    fluxo.loc[:min(prazo_parcelas, prazo_meses)-1, 'Receitas'] += parcela_mensal
     
     # Financiamento
     valor_financiado = custo_construcao * percentual_financiado / 100
@@ -228,7 +236,6 @@ def aba_financiamento_tradicional():
         vgv = st.number_input('VGV (Valor Geral de Vendas) em milhões R$', value=35.0, step=0.1, key='vgv_fin')
         custo_construcao_percentual = st.slider('Custo de Construção (% do VGV)', 50, 90, 70, key='custo_fin')
         prazo_meses = st.number_input('Prazo de Construção (meses)', value=48, step=1, key='prazo_fin')
-
     with col2:
         st.subheader("Distribuição dos Custos")
         percentual_inicio = st.slider('% Custos no Início da Obra', 0, 100, 30, key='custo_inicio_fin')
